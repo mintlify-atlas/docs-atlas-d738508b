@@ -1,0 +1,86 @@
+{
+  "projectType": "infrastructure",
+  "projectName": "JustBenchThatLLM",
+  "projectDescription": "Visual, reproducible benchmarking platform for LLM inference endpoints with Docker and Kubernetes deployment",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker-compose",
+              "deployment/kubernetes-helm",
+              "deployment/configuration"
+            ]
+          },
+          {
+            "group": "Usage Guide",
+            "pages": [
+              "guides/endpoints",
+              "guides/workloads",
+              "guides/benchmarking",
+              "guides/analysis"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "operations/monitoring",
+              "operations/scaling",
+              "operations/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Configuration",
+            "pages": [
+              "reference/docker-compose",
+              "reference/helm-values",
+              "reference/environment-variables"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "reference/architecture",
+              "reference/components"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Side-by-side performance comparison with radar charts",
+    "Stepped load testing to find breaking points",
+    "Production-grade metrics (TTFT, P50/P90/P95/P99 latency)",
+    "Docker Compose and Helm deployment options",
+    "Real-time monitoring and interactive dashboards",
+    "Export results to CSV/JSON for analysis"
+  ],
+  "publicApiSurface": [
+    "docker-compose.yml - Main deployment configuration",
+    "docker-compose-services.yml - Services-only deployment",
+    "helm/justbenchthatllm - Kubernetes Helm chart",
+    "Backend API (port 8000) - REST API for benchmarking",
+    "Frontend UI (port 8005) - Web interface",
+    "Worker service - Benchmark execution engine"
+  ]
+}
