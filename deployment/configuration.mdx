@@ -280,22 +280,6 @@ worker:
 Both backend and worker should use the same CA bundle if they need to communicate with the same LLM endpoints.
 </Note>
 
-### Environment Variable for CA Bundle
-
-After mounting the CA bundle, configure the SSL certificate path:
-
-```yaml
-backend:
-  env:
-    SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.pem
-    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.pem
-
-worker:
-  env:
-    SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.pem
-    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.pem
-```
-
 ## Private Registry Authentication
 
 If your Docker images are hosted in a private registry, configure pull secrets.
