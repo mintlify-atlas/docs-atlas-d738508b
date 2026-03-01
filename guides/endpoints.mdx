@@ -1,0 +1,152 @@
+---
+title: Configuring Endpoints
+description: Learn how to set up and manage LLM inference endpoints for benchmarking, including vLLM, LM Studio, and OpenAI-compatible APIs.
+---
+
+## Overview
+
+JustBenchThatLLM supports multiple endpoint types, allowing you to benchmark and compare different LLM inference servers. Whether you're testing vLLM deployments, LM Studio instances, or any OpenAI-compatible API, the platform provides a unified interface for configuration and testing.
+
+<Info>
+Setting up multiple endpoints enables side-by-side comparisons to help you make informed decisions about your AI infrastructure.
+</Info>
+
+## Supported Endpoint Types
+
+JustBenchThatLLM is compatible with:
+
+- **vLLM**: High-throughput LLM serving framework
+- **LM Studio**: Local LLM deployment platform
+- **OpenAI-compatible APIs**: Any inference server implementing the OpenAI API specification
+- **Custom endpoints**: Any service with compatible API interfaces
+
+## Adding an Endpoint
+
+<Steps>
+  <Step title="Navigate to Endpoints">
+    Access the endpoint configuration page from the main navigation menu.
+  </Step>
+
+  <Step title="Create New Endpoint">
+    Click the "Add Endpoint" or similar button to open the configuration form.
+
+    <img src="/img/endpoint.jpg" alt="Endpoint Configuration" />
+  </Step>
+
+  <Step title="Configure Endpoint Details">
+    Fill in the required information:
+
+    - **Name**: A descriptive identifier for your endpoint (e.g., "vLLM Production", "LM Studio Staging")
+    - **Base URL**: The full URL to your inference server (e.g., `http://localhost:8000`)
+    - **API Key**: Authentication token if required by your endpoint
+    - **Model Name**: The specific model served by this endpoint
+    - **Additional Parameters**: Any endpoint-specific configuration options
+  </Step>
+
+  <Step title="Test Connectivity">
+    Before saving, use the built-in connectivity test to verify your configuration:
+
+    <img src="/img/test.jpg" alt="Testing Endpoint Connectivity" />
+
+    The test will:
+    - Validate the endpoint URL is reachable
+    - Check authentication credentials
+    - Verify the model is available
+    - Ensure API compatibility
+
+    <Tip>
+    Always test connectivity before running benchmarks to avoid wasted time on misconfigured endpoints.
+    </Tip>
+  </Step>
+
+  <Step title="Save Endpoint">
+    Once the test passes, save your endpoint configuration. It will be available for use in all benchmark workloads.
+  </Step>
+</Steps>
+
+## Managing Multiple Endpoints
+
+### Organizing for Comparison
+
+When setting up multiple endpoints, use clear naming conventions to make comparisons easier:
+
+- **By model**: `Mistral-7B-vLLM`, `Mistral-7B-LMStudio`
+- **By version**: `vLLM-0.4.2-Llama3`, `vLLM-0.5.0-Llama3`
+- **By infrastructure**: `GPU-A100-Mistral`, `GPU-T4-Mistral`
+- **By environment**: `Production-API`, `Staging-API`
+
+<Note>
+Consistent naming helps you quickly identify endpoints when reviewing results and creating comparison reports.
+</Note>
+
+### Comparison Use Cases
+
+Multiple endpoints enable powerful comparative analysis:
+
+<Tabs>
+  <Tab title="Models">
+    Compare different models on the same infrastructure:
+    - Mistral vs Llama vs Qwen
+    - 7B vs 13B vs 34B parameter models
+    - Base models vs fine-tuned variants
+  </Tab>
+
+  <Tab title="Configurations">
+    Test configuration impacts:
+    - Different `max_tokens` settings
+    - Temperature and sampling parameters
+    - Concurrency limits
+    - Batch sizes
+  </Tab>
+
+  <Tab title="Libraries">
+    Validate framework updates:
+    - vLLM version upgrades
+    - Framework optimizations
+    - New feature adoption
+  </Tab>
+
+  <Tab title="Infrastructure">
+    Evaluate hardware and deployment options:
+    - GPU vs CPU inference
+    - Different GPU models (A100 vs H100 vs T4)
+    - Memory configurations
+    - Scaling strategies (single instance vs load balanced)
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+### Testing Strategy
+
+1. **Verify connectivity immediately** after configuration changes
+2. **Document endpoint specifications** in the name or description
+3. **Keep staging endpoints** for safe testing before production changes
+4. **Use warmup requests** to ensure models are loaded before benchmarking
+
+### Security Considerations
+
+<Note>
+- Store API keys securely and rotate them regularly
+- Use internal networks for sensitive endpoints
+- Limit benchmark access to authorized users
+- Monitor endpoint usage for anomalies
+</Note>
+
+### Troubleshooting
+
+If connectivity tests fail:
+
+- **Check network accessibility**: Ensure the endpoint URL is reachable from the JustBenchThatLLM instance
+- **Verify API compatibility**: Confirm the endpoint implements the expected API specification
+- **Review authentication**: Double-check API keys and authentication methods
+- **Check model availability**: Ensure the specified model is loaded and ready
+- **Review logs**: Check both JustBenchThatLLM and endpoint server logs for errors
+
+## Next Steps
+
+Once your endpoints are configured and tested:
+
+- [Design workloads](/guides/workloads) to create realistic benchmark scenarios
+- [Run benchmarks](/guides/benchmarking) to measure performance
+- [Analyze results](/guides/analysis) to make data-driven decisions

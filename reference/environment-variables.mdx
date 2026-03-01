@@ -1,0 +1,226 @@
+---
+title: Environment Variables
+description: Complete reference for all environment variables used across JustBenchThatLLM services
+---
+
+## Overview
+
+JustBenchThatLLM services are configured using environment variables. This reference documents all available environment variables for each service.
+
+## Backend Service
+
+The backend service (FastAPI) accepts the following environment variables:
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `REDIS_URL` | Redis connection URL for task queue | `redis://redis:6379/0` | Yes |
+| `LOG_LEVEL` | Logging verbosity level | `INFO` | No |
+| `STORAGE_TYPE` | Storage backend type | `mongodb` | Yes |
+| `MONGODB_URL` | MongoDB connection URL | `mongodb://mongodb:27017` | Yes |
+| `MONGODB_DB_NAME` | MongoDB database name | `benchmark_db` | Yes |
+
+### Example Configuration
+
+**Docker Compose:**
+```yaml
+backend:
+  environment:
+    - REDIS_URL=redis://redis:6379/0
+    - LOG_LEVEL=INFO
+    - STORAGE_TYPE=mongodb
+    - MONGODB_URL=mongodb://mongodb:27017
+    - MONGODB_DB_NAME=benchmark_db
+```
+
+**Helm:**
+```yaml
+backend:
+  env:
+    LOG_LEVEL: INFO
+    STORAGE_TYPE: mongodb
+    MONGODB_DB_NAME: benchmark_db
+```
+
+## Worker Service
+
+The worker service processes benchmark tasks from the Redis queue:
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `REDIS_URL` | Redis connection URL for task queue | `redis://redis:6379/0` | Yes |
+| `LOG_LEVEL` | Logging verbosity level | `INFO` | No |
+| `STORAGE_TYPE` | Storage backend type | `mongodb` | Yes |
+| `MONGODB_URL` | MongoDB connection URL | `mongodb://mongodb:27017` | Yes |
+| `MONGODB_DB_NAME` | MongoDB database name | `benchmark_db` | Yes |
+
+### Example Configuration
+
+**Docker Compose:**
+```yaml
+worker:
+  environment:
+    - REDIS_URL=redis://redis:6379/0
+    - LOG_LEVEL=INFO
+    - MONGODB_URL=mongodb://mongodb:27017
+    - MONGODB_DB_NAME=benchmark_db
+    - STORAGE_TYPE=mongodb
+```
+
+**Helm:**
+```yaml
+worker:
+  env:
+    LOG_LEVEL: INFO
+    STORAGE_TYPE: mongodb
+    MONGODB_DB_NAME: benchmark_db
+```
+
+## Frontend Service
+
+The frontend service (Streamlit) provides the web interface:
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `BACKEND_BASE_URL` | Backend API base URL | `http://backend:8000` | Yes |
+| `APP_PASSWORD` | Application password for frontend access | - | Yes (Helm only) |
+
+### Example Configuration
+
+**Docker Compose:**
+```yaml
+frontend:
+  environment:
+    - BACKEND_BASE_URL=http://backend:8000
+```
+
+**Helm:**
+```yaml
+frontend:
+  env:
+    BACKEND_BASE_URL: ""  # Auto-configured if empty
+    APP_PASSWORD: "your-secure-password"
+```
+
+<Note>
+In Helm deployments, `BACKEND_BASE_URL` is automatically configured if left empty.
+</Note>
+
+## Log Levels
+
+The `LOG_LEVEL` variable accepts the following values:
+
+- `DEBUG` - Detailed debugging information
+- `INFO` - General informational messages (default)
+- `WARNING` - Warning messages for potentially harmful situations
+- `ERROR` - Error messages for serious problems
+
+## Storage Configuration
+
+### MongoDB Connection
+
+The `MONGODB_URL` follows the standard MongoDB connection string format:
+
+```
+mongodb://[username:password@]host[:port][/[database][?options]]
+```
+
+**Examples:**
+- Local: `mongodb://localhost:27017`
+- Docker: `mongodb://mongodb:27017`
+- Atlas: `mongodb+srv://user:pass@cluster.mongodb.net`
+
+### Redis Connection
+
+The `REDIS_URL` follows the Redis connection string format:
+
+```
+redis://[username:password@]host[:port][/database]
+```
+
+**Examples:**
+- Local: `redis://localhost:6379/0`
+- Docker: `redis://redis:6379/0`
+- Authenticated: `redis://:password@redis:6379/0`
+
+## Custom CA Certificates
+
+For environments requiring custom CA certificates (e.g., corporate proxies), configure the CA bundle:
+
+### Helm Configuration
+
+```yaml
+backend:
+  caBundle:
+    enabled: true
+    content: |
+      -----BEGIN CERTIFICATE-----
+      YOUR_CA_CERTIFICATE_HERE
+      -----END CERTIFICATE-----
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+
+worker:
+  caBundle:
+    enabled: true
+    existingConfigMap: "my-ca-bundle"
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+```
+
+## Environment-Specific Configuration
+
+### Development
+
+```bash
+LOG_LEVEL=DEBUG
+REDIS_URL=redis://localhost:6379/0
+MONGODB_URL=mongodb://localhost:27017
+MONGODB_DB_NAME=benchmark_dev
+BACKEND_BASE_URL=http://localhost:8000
+```
+
+### Production
+
+```bash
+LOG_LEVEL=INFO
+REDIS_URL=redis://redis-prod:6379/0
+MONGODB_URL=mongodb://mongo-prod:27017
+MONGODB_DB_NAME=benchmark_prod
+BACKEND_BASE_URL=https://api.yourdomain.com
+APP_PASSWORD=strong-secure-password
+```
+
+## Security Best Practices
+
+<Warning>
+  Never commit sensitive environment variables (passwords, API keys) to version control.
+</Warning>
+
+- Use secrets management tools (Kubernetes Secrets, Docker Secrets, etc.)
+- Set strong values for `APP_PASSWORD` in production
+- Use TLS/SSL for MongoDB and Redis connections in production
+- Rotate credentials regularly
+- Use read-only credentials where possible
+
+## Troubleshooting
+
+### Connection Issues
+
+If services cannot connect to Redis or MongoDB:
+
+1. Verify the connection URLs are correct
+2. Check that Redis and MongoDB are healthy (use health checks)
+3. Ensure services can reach Redis/MongoDB on the network
+4. Check firewall rules and security groups
+
+### Logging
+
+Set `LOG_LEVEL=DEBUG` to get detailed logs for troubleshooting:
+
+```bash
+docker compose logs -f backend
+```
+
+Or in Kubernetes:
+
+```bash
+kubectl logs -f deployment/benchmark-backend
+```

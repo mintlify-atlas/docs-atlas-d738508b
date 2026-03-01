@@ -1,0 +1,449 @@
+---
+title: 'Kubernetes & Helm Deployment'
+description: 'Deploy JustBenchThatLLM to Kubernetes using Helm charts for production-grade orchestration'
+---
+
+## Overview
+
+The Helm chart for JustBenchThatLLM provides a production-ready deployment to Kubernetes with configurable resources, persistence, and scaling options.
+
+### Chart Information
+
+- **Chart Name**: `justbenchthatllm`
+- **Chart Version**: `0.1.0`
+- **App Version**: `latest`
+- **Type**: Application
+- **Maintainer**: Eric RICHARD (contact@redteams.fr)
+
+## Prerequisites
+
+<Steps>
+  <Step title="Kubernetes Cluster">
+    A running Kubernetes cluster (v1.19+) with:
+    - `kubectl` configured to access the cluster
+    - Sufficient resources for all components
+    - Storage provisioner for persistent volumes
+    
+    ```bash
+    kubectl version --short
+    kubectl cluster-info
+    ```
+  </Step>
+  
+  <Step title="Install Helm">
+    Helm 3.0+ is required.
+    
+    ```bash
+    helm version
+    ```
+    
+    If not installed, visit [helm.sh](https://helm.sh/docs/intro/install/)
+  </Step>
+  
+  <Step title="Namespace (Optional)">
+    Create a dedicated namespace for the deployment:
+    
+    ```bash
+    kubectl create namespace justbenchthatllm
+    ```
+  </Step>
+</Steps>
+
+## Installation
+
+### Basic Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/redteamsfr/justbenchthatllm.git
+    cd justbenchthatllm/helm
+    ```
+  </Step>
+  
+  <Step title="Install the Helm chart">
+    ```bash
+    helm install justbenchthatllm ./justbenchthatllm \
+      --namespace justbenchthatllm \
+      --create-namespace
+    ```
+  </Step>
+  
+  <Step title="Wait for deployment">
+    Monitor the deployment status:
+    
+    ```bash
+    kubectl get pods -n justbenchthatllm -w
+    ```
+    
+    All pods should reach `Running` state within a few minutes.
+  </Step>
+</Steps>
+
+### Installation with Custom Values
+
+<Tabs>
+  <Tab title="Using --set flags">
+    ```bash
+    helm install justbenchthatllm ./justbenchthatllm \
+      --namespace justbenchthatllm \
+      --create-namespace \
+      --set frontend.ingress.enabled=true \
+      --set frontend.ingress.hosts[0].host=bench.example.com \
+      --set frontend.env.APP_PASSWORD=your-secure-password
+    ```
+  </Tab>
+  
+  <Tab title="Using values file">
+    Create a custom `my-values.yaml`:
+    
+    ```yaml my-values.yaml
+    frontend:
+      env:
+        APP_PASSWORD: "your-secure-password"
+      ingress:
+        enabled: true
+        className: "nginx"
+        hosts:
+          - host: bench.example.com
+            paths:
+              - path: /
+                pathType: Prefix
+    
+    backend:
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "200m"
+    ```
+    
+    Install with custom values:
+    
+    ```bash
+    helm install justbenchthatllm ./justbenchthatllm \
+      --namespace justbenchthatllm \
+      --create-namespace \
+      -f my-values.yaml
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+The `frontend.env.APP_PASSWORD` is required for production deployments. Set a strong password before installing.
+</Warning>
+
+## Default Architecture
+
+The Helm chart deploys the following components:
+
+### StatefulSets
+- **Redis** (1 replica) - Message broker with persistent storage
+- **MongoDB** (1 replica) - Database with persistent storage
+
+### Deployments
+- **Backend** (1 replica) - FastAPI REST API
+- **Worker** (1 replica) - Background task processor
+- **Frontend** (1 replica) - Streamlit web UI
+
+### Services
+- `redis` - ClusterIP service on port 6379
+- `mongo` - ClusterIP service on port 27017
+- `backend` - ClusterIP service on port 8000
+- `frontend` - ClusterIP service on port 8005
+
+### Persistent Volumes
+- Redis data: 8Gi (default storage class)
+- MongoDB data: 20Gi (default storage class)
+
+## Verifying Deployment
+
+<Steps>
+  <Step title="Check Helm release">
+    ```bash
+    helm list -n justbenchthatllm
+    ```
+    
+    You should see the release with status `deployed`.
+  </Step>
+  
+  <Step title="Check pod status">
+    ```bash
+    kubectl get pods -n justbenchthatllm
+    ```
+    
+    Expected output:
+    ```
+    NAME                      READY   STATUS    RESTARTS   AGE
+    backend-xxx               1/1     Running   0          2m
+    frontend-xxx              1/1     Running   0          2m
+    mongo-0                   1/1     Running   0          2m
+    redis-0                   1/1     Running   0          2m
+    worker-xxx                1/1     Running   0          2m
+    ```
+  </Step>
+  
+  <Step title="Check services">
+    ```bash
+    kubectl get svc -n justbenchthatllm
+    ```
+  </Step>
+  
+  <Step title="Check persistent volumes">
+    ```bash
+    kubectl get pvc -n justbenchthatllm
+    ```
+    
+    Both `redis-data` and `mongo-data` PVCs should be in `Bound` state.
+  </Step>
+</Steps>
+
+## Accessing the Application
+
+### Port Forward (Development)
+
+For quick access during testing:
+
+```bash
+# Forward frontend port
+kubectl port-forward -n justbenchthatllm svc/frontend 8005:8005
+
+# Forward backend port
+kubectl port-forward -n justbenchthatllm svc/backend 8000:8000
+```
+
+Then access:
+- Frontend: http://localhost:8005
+- Backend API: http://localhost:8000/docs
+
+### Ingress (Production)
+
+<Note>
+Enable ingress in your values file to expose the application externally.
+</Note>
+
+```yaml values.yaml
+frontend:
+  ingress:
+    enabled: true
+    className: "nginx"  # or "traefik", etc.
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: justbench.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: justbench-tls
+        hosts:
+          - justbench.example.com
+```
+
+Update the installation:
+
+```bash
+helm upgrade justbenchthatllm ./justbenchthatllm \
+  -n justbenchthatllm \
+  -f values.yaml
+```
+
+## Resource Configuration
+
+The chart includes default resource requests and limits for all components:
+
+<Tabs>
+  <Tab title="Redis">
+    ```yaml
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    ```
+  </Tab>
+  
+  <Tab title="MongoDB">
+    ```yaml
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    ```
+  </Tab>
+  
+  <Tab title="Backend">
+    ```yaml
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    ```
+  </Tab>
+  
+  <Tab title="Worker">
+    ```yaml
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    ```
+  </Tab>
+  
+  <Tab title="Frontend">
+    ```yaml
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+    ```
+  </Tab>
+</Tabs>
+
+Adjust these values in your custom values file based on your workload requirements.
+
+## Upgrading
+
+### Update Chart
+
+```bash
+# Update with new values
+helm upgrade justbenchthatllm ./justbenchthatllm \
+  -n justbenchthatllm \
+  -f my-values.yaml
+
+# View upgrade history
+helm history justbenchthatllm -n justbenchthatllm
+```
+
+### Rollback
+
+```bash
+# Rollback to previous version
+helm rollback justbenchthatllm -n justbenchthatllm
+
+# Rollback to specific revision
+helm rollback justbenchthatllm 2 -n justbenchthatllm
+```
+
+## Uninstalling
+
+```bash
+# Uninstall the Helm release
+helm uninstall justbenchthatllm -n justbenchthatllm
+
+# Delete persistent volumes (optional)
+kubectl delete pvc -n justbenchthatllm --all
+
+# Delete namespace (optional)
+kubectl delete namespace justbenchthatllm
+```
+
+<Warning>
+Deleting persistent volumes will permanently remove all benchmark data and results.
+</Warning>
+
+## Scaling
+
+### Horizontal Scaling
+
+Scale specific components:
+
+```bash
+# Scale backend replicas
+kubectl scale deployment backend -n justbenchthatllm --replicas=3
+
+# Or update via Helm
+helm upgrade justbenchthatllm ./justbenchthatllm \
+  -n justbenchthatllm \
+  --set backend.replicaCount=3
+```
+
+### Storage Scaling
+
+To increase persistent volume sizes, you need to:
+
+1. Check if your storage class supports volume expansion
+2. Update the PVC size in values
+3. Apply the upgrade
+
+```yaml values.yaml
+redis:
+  persistence:
+    size: 16Gi  # Increased from 8Gi
+
+mongo:
+  persistence:
+    size: 50Gi  # Increased from 20Gi
+```
+
+## Monitoring
+
+### View Logs
+
+```bash
+# All pods
+kubectl logs -n justbenchthatllm -l app.kubernetes.io/name=justbenchthatllm
+
+# Specific component
+kubectl logs -n justbenchthatllm -l app.kubernetes.io/component=backend -f
+kubectl logs -n justbenchthatllm -l app.kubernetes.io/component=worker -f
+```
+
+### Health Checks
+
+All services include liveness and readiness probes:
+
+```bash
+# Check pod health status
+kubectl describe pod <pod-name> -n justbenchthatllm
+```
+
+## Troubleshooting
+
+### Pods not starting
+
+```bash
+# Check pod events
+kubectl describe pod <pod-name> -n justbenchthatllm
+
+# Check pod logs
+kubectl logs <pod-name> -n justbenchthatllm
+```
+
+### Persistent volumes not binding
+
+```bash
+# Check PVC status
+kubectl get pvc -n justbenchthatllm
+
+# Describe PVC for events
+kubectl describe pvc <pvc-name> -n justbenchthatllm
+
+# Check available storage classes
+kubectl get storageclass
+```
+
+### Image pull errors
+
+If using private registries, configure pull secrets (see [Configuration](/deployment/configuration)).
+
+## Next Steps
+
+- Configure environment variables and secrets in [Configuration](/deployment/configuration)
+- Set up monitoring and alerting
+- Configure backup strategies for MongoDB
+- Enable ingress with TLS certificates

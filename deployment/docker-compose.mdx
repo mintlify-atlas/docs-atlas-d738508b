@@ -1,0 +1,389 @@
+---
+title: 'Docker Compose Deployment'
+description: 'Deploy JustBenchThatLLM using Docker Compose for quick setup and local development'
+---
+
+## Overview
+
+Docker Compose provides the fastest way to deploy JustBenchThatLLM. The platform consists of five main services that work together to provide a complete benchmarking solution.
+
+### Architecture Components
+
+- **Redis** (port 6379) - Message broker and caching
+- **MongoDB** (port 27017) - Persistent storage for benchmark results
+- **Backend** (port 8000) - FastAPI REST API server
+- **Worker** - Background task processor for running benchmarks
+- **Frontend** (port 8005) - Streamlit web interface
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Docker">
+    Ensure Docker Engine 20.10+ is installed on your system.
+    
+    ```bash
+    docker --version
+    ```
+  </Step>
+  
+  <Step title="Install Docker Compose">
+    Docker Compose v2.0+ is required.
+    
+    ```bash
+    docker compose version
+    ```
+  </Step>
+</Steps>
+
+## Quick Start
+
+<Steps>
+  <Step title="Download the docker-compose.yml file">
+    ```bash
+    curl -O https://raw.githubusercontent.com/redteamsfr/justbenchthatllm/main/docker-compose.yml
+    ```
+  </Step>
+  
+  <Step title="Start all services">
+    ```bash
+    docker compose up -d
+    ```
+    
+    This will pull the necessary images and start all containers in detached mode.
+  </Step>
+  
+  <Step title="Verify the deployment">
+    Check that all services are running:
+    
+    ```bash
+    docker compose ps
+    ```
+    
+    You should see all five services with status "Up" or "healthy".
+  </Step>
+  
+  <Step title="Access the application">
+    Open your browser and navigate to:
+    
+    - Frontend: http://localhost:8005
+    - Backend API: http://localhost:8000/docs
+  </Step>
+</Steps>
+
+## Configuration Details
+
+### Full Stack Deployment
+
+The complete `docker-compose.yml` includes all application services along with Redis and MongoDB:
+
+```yaml docker-compose.yml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:8.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    image: redteamsfr/benchmark-backend:latest
+    container_name: benchmark-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - STORAGE_TYPE=mongodb
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=benchmark_db
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    image: redteamsfr/benchmark-worker:latest
+    container_name: benchmark-worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=benchmark_db
+      - STORAGE_TYPE=mongodb  
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: redteamsfr/benchmark-frontend:latest
+    container_name: benchmark-frontend
+    ports:
+      - "8005:8005"
+    environment:
+      - BACKEND_BASE_URL=http://backend:8000
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  mongo_data:
+```
+
+### Services-Only Deployment
+
+<Note>
+If you already have Redis and MongoDB instances running, use `docker-compose-services.yml` to deploy only the application services.
+</Note>
+
+```yaml docker-compose-services.yml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:8.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  
+volumes:
+  redis_data:
+  mongo_data:
+```
+
+To use this configuration:
+
+```bash
+docker compose -f docker-compose-services.yml up -d
+```
+
+## Service Configuration
+
+### Redis
+
+- **Image**: `redis:7-alpine`
+- **Port**: 6379
+- **Persistence**: AOF (Append-Only File) enabled
+- **Volume**: `redis_data` mounted at `/data`
+- **Health Check**: Runs `redis-cli ping` every 5 seconds
+
+### MongoDB
+
+- **Image**: `mongo:8.0`
+- **Port**: 27017
+- **Volume**: `mongo_data` mounted at `/data/db`
+- **Health Check**: Runs `mongosh` ping command every 5 seconds
+
+### Backend
+
+- **Image**: `redteamsfr/benchmark-backend:latest`
+- **Port**: 8000
+- **Dependencies**: Waits for Redis and MongoDB to be healthy before starting
+- **Environment Variables**:
+  - `REDIS_URL`: Connection string for Redis
+  - `STORAGE_TYPE`: Set to `mongodb`
+  - `MONGODB_URL`: MongoDB connection string
+  - `MONGODB_DB_NAME`: Database name (default: `benchmark_db`)
+  - `LOG_LEVEL`: Logging verbosity (default: `INFO`)
+
+### Worker
+
+- **Image**: `redteamsfr/benchmark-worker:latest`
+- **No exposed ports** (internal service)
+- **Dependencies**: Requires Redis and MongoDB to be healthy
+- **Environment Variables**: Same as backend
+
+<Warning>
+The worker service runs benchmark tasks and may consume significant CPU and memory depending on your workload.
+</Warning>
+
+### Frontend
+
+- **Image**: `redteamsfr/benchmark-frontend:latest`
+- **Port**: 8005
+- **Environment Variables**:
+  - `BACKEND_BASE_URL`: URL to reach the backend API (default: `http://backend:8000`)
+
+## Volumes and Data Persistence
+
+Docker Compose creates named volumes for persistent storage:
+
+```bash
+# List volumes
+docker volume ls | grep justbenchthatllm
+
+# Inspect a volume
+docker volume inspect <volume_name>
+
+# Backup MongoDB data
+docker compose exec mongo mongodump --out=/data/db/backup
+
+# Backup Redis data
+docker compose exec redis redis-cli BGSAVE
+```
+
+## Health Checks
+
+All services include health checks to ensure proper startup ordering:
+
+<Tabs>
+  <Tab title="Redis Health Check">
+    ```yaml
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ```
+    
+    Returns `PONG` when Redis is ready.
+  </Tab>
+  
+  <Tab title="MongoDB Health Check">
+    ```yaml
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ```
+    
+    Executes admin ping command to verify MongoDB is accepting connections.
+  </Tab>
+</Tabs>
+
+## Common Operations
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f backend
+docker compose logs -f worker
+```
+
+### Restart Services
+
+```bash
+# Restart all services
+docker compose restart
+
+# Restart specific service
+docker compose restart backend
+```
+
+### Stop and Remove
+
+```bash
+# Stop services (keeps volumes)
+docker compose down
+
+# Stop and remove volumes (deletes all data)
+docker compose down -v
+```
+
+### Update Images
+
+```bash
+# Pull latest images
+docker compose pull
+
+# Recreate containers with new images
+docker compose up -d
+```
+
+## Troubleshooting
+
+### Backend won't start
+
+Check that Redis and MongoDB are healthy:
+
+```bash
+docker compose ps redis mongo
+```
+
+View backend logs for connection errors:
+
+```bash
+docker compose logs backend
+```
+
+### Worker not processing tasks
+
+Verify Redis connection:
+
+```bash
+docker compose exec worker env | grep REDIS_URL
+```
+
+Check worker logs:
+
+```bash
+docker compose logs -f worker
+```
+
+### Port conflicts
+
+If ports are already in use, modify the port mappings in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "8080:8000"  # Map to different host port
+```
+
+## Next Steps
+
+- Configure custom environment variables in [Configuration](/deployment/configuration)
+- Set up ingress for production deployments
+- Monitor resource usage with `docker stats`

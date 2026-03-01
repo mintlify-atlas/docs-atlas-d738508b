@@ -1,0 +1,274 @@
+---
+title: Running Benchmarks
+description: Execute benchmark runs using fixed or stepped load modes, monitor active tests, and manage your benchmark history with powerful filtering.
+---
+
+## Overview
+
+JustBenchThatLLM provides two benchmark modes designed for different testing scenarios: fixed load for consistent performance measurement and stepped load for discovering capacity limits. Understanding when and how to use each mode is key to effective performance testing.
+
+## Benchmark Modes
+
+Choose the appropriate mode based on your testing objectives:
+
+### Fixed Load Mode
+
+**Purpose**: Test consistent performance under stable conditions
+
+<img src="/img/load_configuration_01.jpg" alt="Fixed Load Configuration" />
+
+Fixed load mode maintains constant concurrency throughout the benchmark, making it perfect for:
+
+- **Baseline establishment**: Measure optimal performance without variable load
+- **Reproducible tests**: Compare identical conditions across different configurations
+- **SLO validation**: Verify performance meets targets under expected load
+- **Regression testing**: Detect performance degradation after changes
+
+**Configuration parameters**:
+- **Concurrency**: Number of simultaneous requests (remains constant)
+- **Total requests**: How many requests to send
+- **Duration**: Time window for request distribution
+
+<Tip>
+Use fixed load mode when you need consistent, comparable results across multiple benchmark runs.
+</Tip>
+
+### Stepped Load Mode
+
+**Purpose**: Progressively increase concurrency to find infrastructure limits
+
+<img src="/img/load_configuration_02.jpg" alt="Stepped Load Configuration" />
+
+Stepped load mode automatically increases concurrency in stages, revealing how your endpoint handles increasing pressure:
+
+- **Capacity planning**: Discover maximum sustainable concurrency
+- **Breaking point identification**: Find where performance degrades
+- **Scalability testing**: Understand how metrics change with load
+- **Resource planning**: Determine when to scale infrastructure
+
+**Configuration parameters**:
+- **Starting concurrency**: Initial concurrent requests
+- **Step size**: Concurrency increase per step
+- **Step duration**: Time at each concurrency level
+- **Maximum concurrency**: Upper limit for testing
+- **Requests per step**: Number of requests at each level
+
+<Info>
+Stepped load testing automatically generates performance curves showing how latency, throughput, and success rates change with increasing load.
+</Info>
+
+### Choosing the Right Mode
+
+<Tabs>
+  <Tab title="Use Fixed Load When">
+    - Comparing two different models
+    - Testing configuration changes (max_tokens, temperature)
+    - Validating framework updates
+    - Establishing baseline metrics
+    - Reproducing previous test conditions
+    - Verifying SLO compliance
+  </Tab>
+
+  <Tab title="Use Stepped Load When">
+    - Planning infrastructure capacity
+    - Finding performance breaking points
+    - Understanding scalability characteristics
+    - Determining optimal concurrency levels
+    - Testing under variable load conditions
+    - Preparing for traffic growth
+  </Tab>
+</Tabs>
+
+## Starting a Benchmark
+
+<Steps>
+  <Step title="Select Workload">
+    Choose a configured workload from your workload library, or create a new one following the [workload design guide](/guides/workloads).
+  </Step>
+
+  <Step title="Verify Configuration">
+    Review all parameters before starting:
+    - Endpoint is online and reachable
+    - Load mode and concurrency settings are appropriate
+    - Warmup requests are configured
+    - Tags are applied for filtering later
+  </Step>
+
+  <Step title="Start Benchmark">
+    Launch the benchmark run. The system will:
+    - Execute warmup requests first (if configured)
+    - Begin measurement phase
+    - Collect detailed metrics for each request
+    - Generate real-time progress updates
+  </Step>
+
+  <Step title="Monitor Progress">
+    Track active benchmarks from the dashboard (see [Monitoring Active Benchmarks](#monitoring-active-benchmarks) below).
+  </Step>
+</Steps>
+
+<Note>
+Warmup requests initialize your inference pipeline before measurements begin, ensuring more accurate results. This is especially important for cold starts and GPU memory allocation.
+</Note>
+
+## Monitoring Active Benchmarks
+
+The dashboard provides real-time visibility into running benchmarks:
+
+<img src="/img/dashboard_01.jpg" alt="Dashboard with Active Benchmarks" />
+
+### Active Benchmark Status
+
+For each running benchmark, you can see:
+
+- **Progress**: Percentage complete or current step (for stepped load)
+- **Current metrics**: Live latency and throughput updates
+- **Request count**: Completed vs total requests
+- **Elapsed time**: How long the benchmark has been running
+- **Estimated completion**: When the benchmark will finish
+
+### Real-Time Metrics
+
+As benchmarks run, preliminary metrics are updated:
+
+- Current average latency
+- Requests per second
+- Success rate
+- Active concurrent requests
+
+<Tip>
+Monitor active benchmarks to catch issues early, such as endpoint failures or unexpected performance degradation.
+</Tip>
+
+## Dashboard Management
+
+The dashboard is your mission control for all benchmark activity:
+
+### Accessing Recent Runs
+
+Recent benchmarks appear at the top of the dashboard with quick access to:
+
+- Detailed results and metrics
+- Comparison tools
+- Export options
+- Duplicate/rerun functionality
+
+### Filtering Benchmarks
+
+Find exactly what you need with powerful filtering options:
+
+<img src="/img/filter.jpg" alt="Dashboard Filtering" />
+
+#### Filter by Tags
+
+Tags help organize related benchmarks:
+
+```
+Examples:
+- Filter by "production" to see production endpoint tests
+- Filter by "vllm-v0.5.0" to find specific version benchmarks
+- Filter by "mistral-7b" to compare all Mistral model tests
+- Combine tags like "staging" + "stress-test" for targeted views
+```
+
+<Info>
+Use multiple tags simultaneously to narrow down results and find specific benchmark groups.
+</Info>
+
+#### Filter by Date Range
+
+Timeframe filtering helps track changes over time:
+
+- **Last 24 hours**: Recent testing activity
+- **Last 7 days**: Weekly comparison and trends
+- **Last 30 days**: Monthly performance tracking
+- **Custom range**: Specific periods (e.g., before/after deployment)
+
+#### Combined Filtering
+
+Combine tag and date filters for precise queries:
+
+```
+Use cases:
+- "All GPU-A100 benchmarks from last week"
+- "Mistral model tests run yesterday"
+- "Production endpoints tested in Q1 2025"
+- "Baseline tests from the past month"
+```
+
+### Search and Organization
+
+Additional organization features:
+
+- **Search by name**: Find specific benchmark runs by title
+- **Sort options**: Order by date, duration, or performance metrics
+- **Archive old runs**: Keep dashboard focused on recent activity
+- **Pin important results**: Quick access to key benchmarks
+
+## Best Practices
+
+### Before Running Benchmarks
+
+<Steps>
+  <Step title="Test Endpoint Connectivity">
+    Always verify endpoints are reachable before starting long benchmark runs.
+  </Step>
+
+  <Step title="Choose Appropriate Mode">
+    Select fixed or stepped load based on your testing goals.
+  </Step>
+
+  <Step title="Configure Warmup">
+    Include warmup requests to ensure accurate measurements.
+  </Step>
+
+  <Step title="Apply Tags">
+    Tag benchmarks for easy filtering and organization later.
+  </Step>
+</Steps>
+
+### During Benchmarks
+
+- **Monitor initial results**: Check first few minutes to catch configuration errors
+- **Watch for failures**: High error rates may indicate endpoint issues
+- **Note external factors**: Document if other activity affects results
+- **Avoid interference**: Don't run other intensive operations during critical benchmarks
+
+### After Benchmarks
+
+- **Review immediately**: Check results while context is fresh
+- **Compare with expectations**: Validate results match anticipated performance
+- **Document findings**: Add notes about interesting observations
+- **Tag appropriately**: Ensure tags accurately reflect the benchmark purpose
+
+## Troubleshooting
+
+### Benchmark Fails to Start
+
+- Verify endpoint connectivity
+- Check workload configuration for errors
+- Ensure sufficient system resources
+- Review logs for specific error messages
+
+### High Error Rates During Run
+
+- Endpoint may be overloaded (reduce concurrency)
+- Network connectivity issues
+- Model serving errors (check endpoint logs)
+- Timeout settings too aggressive
+
+### Unexpected Results
+
+- Ensure warmup completed successfully
+- Check for external load on endpoint
+- Verify no configuration changes occurred
+- Compare with historical baselines
+
+## Next Steps
+
+Once your benchmarks complete:
+
+- [Analyze results](/guides/analysis) to understand performance metrics
+- Use comparison views to evaluate different configurations
+- Export data for further analysis or reporting
+- Make data-driven decisions about your infrastructure

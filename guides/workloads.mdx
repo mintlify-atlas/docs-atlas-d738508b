@@ -1,0 +1,236 @@
+---
+title: Designing Workloads
+description: Create realistic workload configurations that match your production patterns, including concurrency settings, request patterns, and model parameters.
+---
+
+## Overview
+
+Workload design is the foundation of meaningful benchmarks. JustBenchThatLLM allows you to configure realistic scenarios that mirror your actual production usage patterns, ensuring your benchmark results translate to real-world performance.
+
+<img src="/img/workload.jpg" alt="Workload Configuration" />
+
+<Tip>
+The most valuable benchmarks replicate production conditions as closely as possible. Design workloads that reflect your actual use cases.
+</Tip>
+
+## Creating a Workload
+
+<Steps>
+  <Step title="Start New Workload">
+    Navigate to the workload configuration section and create a new workload definition.
+  </Step>
+
+  <Step title="Select Endpoint">
+    Choose the endpoint you want to benchmark from your configured endpoints. You can run the same workload against multiple endpoints for comparison.
+  </Step>
+
+  <Step title="Configure Load Pattern">
+    Choose between fixed load or stepped load mode:
+
+    - **Fixed Load**: Consistent concurrency for stable baseline measurements
+    - **Stepped Load**: Progressive concurrency increases to find performance limits
+
+    See [Benchmark Modes](/guides/benchmarking#benchmark-modes) for detailed explanations.
+  </Step>
+
+  <Step title="Set Workload Parameters">
+    Configure the parameters that define your benchmark scenario (detailed in sections below).
+  </Step>
+
+  <Step title="Add Warmup Requests (Recommended)">
+    Configure warmup requests to initialize your inference pipeline before measurements begin, ensuring more accurate results.
+
+    <Info>
+    Warmup requests help load models into memory and stabilize the inference pipeline before actual measurements start.
+    </Info>
+  </Step>
+
+  <Step title="Save and Tag">
+    Save your workload configuration with descriptive tags for easy filtering later. Tags help organize and find related benchmarks in the dashboard.
+  </Step>
+</Steps>
+
+## Workload Parameters
+
+### Concurrency Settings
+
+Concurrency controls how many simultaneous requests hit your endpoint:
+
+- **Low concurrency (1-5)**: Tests baseline latency with minimal contention
+- **Medium concurrency (5-20)**: Simulates typical production load
+- **High concurrency (20+)**: Stress tests to find breaking points
+
+<Note>
+Start with low concurrency to establish a baseline, then increase to test scalability.
+</Note>
+
+### Request Patterns
+
+Define how requests are distributed over time:
+
+- **Total requests**: The number of requests to send during the benchmark
+- **Duration**: Time window for request distribution
+- **Request distribution**: Steady rate vs burst patterns
+
+### Model Settings
+
+Configure the inference parameters for each request:
+
+<Tabs>
+  <Tab title="max_tokens">
+    Controls the maximum length of generated responses:
+    - Short responses (50-100): Chat, classification
+    - Medium responses (200-500): Summaries, explanations
+    - Long responses (1000+): Document generation, detailed analysis
+
+    <Tip>
+    Test with your expected production token lengths, as they significantly impact latency and throughput.
+    </Tip>
+  </Tab>
+
+  <Tab title="temperature">
+    Controls response randomness:
+    - Low (0.0-0.3): Deterministic, focused responses
+    - Medium (0.5-0.7): Balanced creativity
+    - High (0.8-1.0): More varied, creative outputs
+
+    Different temperature values may affect generation speed.
+  </Tab>
+
+  <Tab title="Other Parameters">
+    Additional parameters to configure:
+    - `top_p`: Nucleus sampling threshold
+    - `top_k`: Top-k sampling parameter
+    - `presence_penalty`: Penalize repeated tokens
+    - `frequency_penalty`: Reduce word repetition
+    - `stop_sequences`: Define generation endpoints
+  </Tab>
+</Tabs>
+
+### Warmup Configuration
+
+Warmup requests prepare your endpoint before measurement:
+
+- **Number of warmup requests**: Typically 5-20 requests
+- **Warmup concurrency**: Usually matches or is lower than test concurrency
+- **Warmup parameters**: Should mirror actual test parameters
+
+<Info>
+Warmup is especially important for:
+- Cold starts (model not yet loaded)
+- GPU memory allocation
+- JIT compilation optimization
+- Cache warming
+</Info>
+
+## Workload Design Patterns
+
+### Baseline Performance
+
+**Goal**: Establish optimal performance metrics
+
+- Concurrency: 1
+- Duration: 5-10 minutes
+- Requests: 50-100
+- Use case: Understand minimum latency without contention
+
+### Typical Production Load
+
+**Goal**: Measure expected production performance
+
+- Concurrency: Match expected concurrent users
+- Duration: 15-30 minutes
+- Requests: 500-1000
+- Use case: Validate SLOs and typical operation
+
+### Stress Testing
+
+**Goal**: Find breaking points and maximum capacity
+
+- Concurrency: Progressive increase (stepped load)
+- Duration: 30-60 minutes
+- Requests: 1000+
+- Use case: Capacity planning and infrastructure limits
+
+### Configuration Comparison
+
+**Goal**: Compare different model parameters
+
+- Keep all settings constant except the parameter being tested
+- Run multiple workloads varying only one parameter
+- Use case: Optimize temperature, max_tokens, or other settings
+
+## Duplicating and Rerunning Workloads
+
+JustBenchThatLLM makes it easy to reproduce benchmarks with identical parameters:
+
+<img src="/img/rerun.jpg" alt="Duplicate Workload" />
+
+### One-Click Duplication
+
+1. Find a completed benchmark in the dashboard
+2. Click the duplicate/rerun button
+3. The workload configuration is copied with all parameters intact
+4. Modify if needed or run immediately
+
+<Tip>
+Duplication is perfect for:
+- Validating results (rerun identical benchmarks)
+- Testing changes (duplicate and modify one parameter)
+- Comparing over time (rerun after infrastructure changes)
+</Tip>
+
+## Organizing Workloads
+
+### Tagging Strategy
+
+Use tags to organize related benchmarks:
+
+- **Environment**: `production`, `staging`, `development`
+- **Purpose**: `baseline`, `stress-test`, `comparison`
+- **Component**: `vllm`, `model-mistral`, `gpu-a100`
+- **Sprint/Version**: `sprint-23`, `v1.2.0`, `pre-release`
+
+### Naming Conventions
+
+Choose descriptive names that explain the workload:
+
+```
+Good: "Mistral-7B Baseline - Single User"
+Better: "Mistral-7B Baseline - 1 concurrent, 100 tokens, temp 0.7"
+
+Good: "Load Test"
+Better: "Stepped Load Test - 1 to 50 concurrent users"
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Start Simple">
+    Begin with basic configurations and gradually increase complexity as you understand your system's behavior.
+  </Step>
+
+  <Step title="Use Warmup">
+    Always include warmup requests for accurate measurements, especially for cold starts.
+  </Step>
+
+  <Step title="Test One Variable at a Time">
+    When comparing configurations, change only one parameter between runs to isolate its impact.
+  </Step>
+
+  <Step title="Match Production">
+    Design workloads that reflect your actual usage patterns for the most relevant results.
+  </Step>
+
+  <Step title="Document Intent">
+    Use tags and descriptions to record why you ran a benchmark and what you were testing.
+  </Step>
+</Steps>
+
+## Next Steps
+
+With your workloads configured:
+
+- [Run benchmarks](/guides/benchmarking) using fixed or stepped load modes
+- [Analyze results](/guides/analysis) to understand performance characteristics
+- Compare multiple workloads to make data-driven decisions

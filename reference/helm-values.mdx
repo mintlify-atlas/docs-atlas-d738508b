@@ -1,0 +1,591 @@
+---
+title: Helm Values Reference
+description: Complete reference for all Helm chart configuration options
+---
+
+## Overview
+
+This reference documents all available configuration options in the JustBenchThatLLM Helm chart `values.yaml` file.
+
+## Global Configuration
+
+<ParamField path="global.labels" type="object" default="{}">
+  Global labels applied to all resources
+</ParamField>
+
+<ParamField path="global.annotations" type="object" default="{}">
+  Global annotations applied to all resources
+</ParamField>
+
+## Image Pull Secrets
+
+<ParamField path="pullSecret.create" type="boolean" default="false">
+  Set to `true` to create a pull secret for private Docker registries
+</ParamField>
+
+<ParamField path="pullSecret.username" type="string" default="">
+  Username for Docker registry authentication
+</ParamField>
+
+<ParamField path="pullSecret.password" type="string" default="">
+  Password for Docker registry authentication
+</ParamField>
+
+<ParamField path="pullSecret.registry" type="string" default="docker.io">
+  Docker registry URL
+</ParamField>
+
+## Redis Configuration
+
+<ParamField path="redis.enabled" type="boolean" default="true">
+  Enable Redis deployment
+</ParamField>
+
+<ParamField path="redis.image.repository" type="string" default="redis">
+  Redis Docker image repository
+</ParamField>
+
+<ParamField path="redis.image.tag" type="string" default="7-alpine">
+  Redis Docker image tag
+</ParamField>
+
+<ParamField path="redis.image.pullPolicy" type="string" default="IfNotPresent">
+  Image pull policy: `Always`, `IfNotPresent`, or `Never`
+</ParamField>
+
+<ParamField path="redis.service.type" type="string" default="ClusterIP">
+  Kubernetes service type
+</ParamField>
+
+<ParamField path="redis.service.port" type="integer" default="6379">
+  Redis service port
+</ParamField>
+
+<ParamField path="redis.replicaCount" type="integer" default="1">
+  Number of Redis replicas
+</ParamField>
+
+### Redis Persistence
+
+<ParamField path="redis.persistence.enabled" type="boolean" default="true">
+  Enable persistent storage for Redis
+</ParamField>
+
+<ParamField path="redis.persistence.storageClass" type="string" default="">
+  Storage class for persistent volume (uses default if empty)
+</ParamField>
+
+<ParamField path="redis.persistence.size" type="string" default="8Gi">
+  Size of persistent volume
+</ParamField>
+
+<ParamField path="redis.persistence.accessMode" type="string" default="ReadWriteOnce">
+  Persistent volume access mode
+</ParamField>
+
+### Redis Resources
+
+<ParamField path="redis.resources.requests.memory" type="string" default="256Mi">
+  Memory request
+</ParamField>
+
+<ParamField path="redis.resources.requests.cpu" type="string" default="100m">
+  CPU request
+</ParamField>
+
+<ParamField path="redis.resources.limits.memory" type="string" default="512Mi">
+  Memory limit
+</ParamField>
+
+<ParamField path="redis.resources.limits.cpu" type="string" default="500m">
+  CPU limit
+</ParamField>
+
+### Redis Health Checks
+
+<ParamField path="redis.healthcheck.initialDelaySeconds" type="integer" default="10">
+  Initial delay before health checks start
+</ParamField>
+
+<ParamField path="redis.healthcheck.periodSeconds" type="integer" default="5">
+  How often to perform health checks
+</ParamField>
+
+<ParamField path="redis.healthcheck.timeoutSeconds" type="integer" default="3">
+  Health check timeout
+</ParamField>
+
+<ParamField path="redis.healthcheck.failureThreshold" type="integer" default="5">
+  Number of failures before marking unhealthy
+</ParamField>
+
+## MongoDB Configuration
+
+<ParamField path="mongo.enabled" type="boolean" default="true">
+  Enable MongoDB deployment
+</ParamField>
+
+<ParamField path="mongo.image.repository" type="string" default="mongo">
+  MongoDB Docker image repository
+</ParamField>
+
+<ParamField path="mongo.image.tag" type="string" default="8.0">
+  MongoDB Docker image tag
+</ParamField>
+
+<ParamField path="mongo.image.pullPolicy" type="string" default="IfNotPresent">
+  Image pull policy
+</ParamField>
+
+<ParamField path="mongo.service.type" type="string" default="ClusterIP">
+  Kubernetes service type
+</ParamField>
+
+<ParamField path="mongo.service.port" type="integer" default="27017">
+  MongoDB service port
+</ParamField>
+
+<ParamField path="mongo.replicaCount" type="integer" default="1">
+  Number of MongoDB replicas
+</ParamField>
+
+### MongoDB Persistence
+
+<ParamField path="mongo.persistence.enabled" type="boolean" default="true">
+  Enable persistent storage for MongoDB
+</ParamField>
+
+<ParamField path="mongo.persistence.storageClass" type="string" default="">
+  Storage class for persistent volume
+</ParamField>
+
+<ParamField path="mongo.persistence.size" type="string" default="20Gi">
+  Size of persistent volume
+</ParamField>
+
+<ParamField path="mongo.persistence.accessMode" type="string" default="ReadWriteOnce">
+  Persistent volume access mode
+</ParamField>
+
+### MongoDB Resources
+
+<ParamField path="mongo.resources.requests.memory" type="string" default="512Mi">
+  Memory request
+</ParamField>
+
+<ParamField path="mongo.resources.requests.cpu" type="string" default="250m">
+  CPU request
+</ParamField>
+
+<ParamField path="mongo.resources.limits.memory" type="string" default="2Gi">
+  Memory limit
+</ParamField>
+
+<ParamField path="mongo.resources.limits.cpu" type="string" default="1000m">
+  CPU limit
+</ParamField>
+
+### MongoDB Health Checks
+
+<ParamField path="mongo.healthcheck.initialDelaySeconds" type="integer" default="30">
+  Initial delay before health checks start
+</ParamField>
+
+<ParamField path="mongo.healthcheck.periodSeconds" type="integer" default="5">
+  How often to perform health checks
+</ParamField>
+
+<ParamField path="mongo.healthcheck.timeoutSeconds" type="integer" default="3">
+  Health check timeout
+</ParamField>
+
+<ParamField path="mongo.healthcheck.failureThreshold" type="integer" default="5">
+  Number of failures before marking unhealthy
+</ParamField>
+
+## Backend Configuration
+
+<ParamField path="backend.enabled" type="boolean" default="true">
+  Enable backend deployment
+</ParamField>
+
+<ParamField path="backend.image.repository" type="string" default="redteamsfr/benchmark-backend">
+  Backend Docker image repository
+</ParamField>
+
+<ParamField path="backend.image.tag" type="string" default="latest">
+  Backend Docker image tag
+</ParamField>
+
+<ParamField path="backend.image.pullPolicy" type="string" default="IfNotPresent">
+  Image pull policy
+</ParamField>
+
+<ParamField path="backend.pullSecret" type="string" default="">
+  Name of existing image pull secret
+</ParamField>
+
+<ParamField path="backend.service.type" type="string" default="ClusterIP">
+  Kubernetes service type
+</ParamField>
+
+<ParamField path="backend.service.port" type="integer" default="8000">
+  Backend service port
+</ParamField>
+
+<ParamField path="backend.replicaCount" type="integer" default="1">
+  Number of backend replicas
+</ParamField>
+
+### Backend Environment Variables
+
+<ParamField path="backend.env.LOG_LEVEL" type="string" default="INFO">
+  Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+</ParamField>
+
+<ParamField path="backend.env.STORAGE_TYPE" type="string" default="mongodb">
+  Storage backend type
+</ParamField>
+
+<ParamField path="backend.env.MONGODB_DB_NAME" type="string" default="benchmark_db">
+  MongoDB database name
+</ParamField>
+
+### Backend CA Bundle
+
+<ParamField path="backend.caBundle.enabled" type="boolean" default="false">
+  Enable custom CA certificate bundle mounting
+</ParamField>
+
+<ParamField path="backend.caBundle.content" type="string" default="">
+  Inline certificate content in PEM format (use this OR `existingConfigMap`)
+</ParamField>
+
+<ParamField path="backend.caBundle.existingConfigMap" type="string" default="">
+  Reference to existing ConfigMap containing CA bundle
+</ParamField>
+
+<ParamField path="backend.caBundle.mountPath" type="string" default="/etc/ssl/certs/ca-bundle.pem">
+  Mount path inside the container
+</ParamField>
+
+<ParamField path="backend.caBundle.subPath" type="string" default="ca-bundle.pem">
+  Key name in the ConfigMap
+</ParamField>
+
+### Backend Resources
+
+<ParamField path="backend.resources.requests.memory" type="string" default="256Mi">
+  Memory request
+</ParamField>
+
+<ParamField path="backend.resources.requests.cpu" type="string" default="100m">
+  CPU request
+</ParamField>
+
+<ParamField path="backend.resources.limits.memory" type="string" default="512Mi">
+  Memory limit
+</ParamField>
+
+<ParamField path="backend.resources.limits.cpu" type="string" default="500m">
+  CPU limit
+</ParamField>
+
+### Backend Health Checks
+
+<ParamField path="backend.livenessProbe" type="object">
+  **httpGet.path**: `/health`
+  
+  **httpGet.port**: `8000`
+  
+  **initialDelaySeconds**: `30`
+  
+  **periodSeconds**: `10`
+  
+  **timeoutSeconds**: `5`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+<ParamField path="backend.readinessProbe" type="object">
+  **httpGet.path**: `/ready`
+  
+  **httpGet.port**: `8000`
+  
+  **initialDelaySeconds**: `10`
+  
+  **periodSeconds**: `5`
+  
+  **timeoutSeconds**: `3`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+## Worker Configuration
+
+<ParamField path="worker.enabled" type="boolean" default="true">
+  Enable worker deployment
+</ParamField>
+
+<ParamField path="worker.image.repository" type="string" default="redteamsfr/benchmark-worker">
+  Worker Docker image repository
+</ParamField>
+
+<ParamField path="worker.image.tag" type="string" default="latest">
+  Worker Docker image tag
+</ParamField>
+
+<ParamField path="worker.image.pullPolicy" type="string" default="IfNotPresent">
+  Image pull policy
+</ParamField>
+
+<ParamField path="worker.pullSecret" type="string" default="">
+  Name of existing image pull secret
+</ParamField>
+
+<ParamField path="worker.replicaCount" type="integer" default="1">
+  Number of worker replicas
+</ParamField>
+
+### Worker Environment Variables
+
+<ParamField path="worker.env.LOG_LEVEL" type="string" default="INFO">
+  Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+</ParamField>
+
+<ParamField path="worker.env.STORAGE_TYPE" type="string" default="mongodb">
+  Storage backend type
+</ParamField>
+
+<ParamField path="worker.env.MONGODB_DB_NAME" type="string" default="benchmark_db">
+  MongoDB database name
+</ParamField>
+
+### Worker CA Bundle
+
+<ParamField path="worker.caBundle.enabled" type="boolean" default="true">
+  Enable custom CA certificate bundle mounting
+</ParamField>
+
+<ParamField path="worker.caBundle.content" type="string">
+  Inline certificate content in PEM format (use this OR `existingConfigMap`)
+</ParamField>
+
+<ParamField path="worker.caBundle.existingConfigMap" type="string" default="">
+  Reference to existing ConfigMap containing CA bundle
+</ParamField>
+
+<ParamField path="worker.caBundle.mountPath" type="string" default="/etc/ssl/certs/ca-bundle.pem">
+  Mount path inside the container
+</ParamField>
+
+<ParamField path="worker.caBundle.subPath" type="string" default="ca-bundle.pem">
+  Key name in the ConfigMap
+</ParamField>
+
+### Worker Resources
+
+<ParamField path="worker.resources.requests.memory" type="string" default="512Mi">
+  Memory request
+</ParamField>
+
+<ParamField path="worker.resources.requests.cpu" type="string" default="250m">
+  CPU request
+</ParamField>
+
+<ParamField path="worker.resources.limits.memory" type="string" default="1Gi">
+  Memory limit
+</ParamField>
+
+<ParamField path="worker.resources.limits.cpu" type="string" default="1000m">
+  CPU limit
+</ParamField>
+
+### Worker Health Checks
+
+<ParamField path="worker.livenessProbe" type="object">
+  **httpGet.path**: `/health`
+  
+  **httpGet.port**: `8006`
+  
+  **initialDelaySeconds**: `30`
+  
+  **periodSeconds**: `10`
+  
+  **timeoutSeconds**: `5`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+<ParamField path="worker.readinessProbe" type="object">
+  **httpGet.path**: `/ready`
+  
+  **httpGet.port**: `8006`
+  
+  **initialDelaySeconds**: `10`
+  
+  **periodSeconds**: `5`
+  
+  **timeoutSeconds**: `3`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+## Frontend Configuration
+
+<ParamField path="frontend.enabled" type="boolean" default="true">
+  Enable frontend deployment
+</ParamField>
+
+<ParamField path="frontend.image.repository" type="string" default="redteamsfr/benchmark-frontend">
+  Frontend Docker image repository
+</ParamField>
+
+<ParamField path="frontend.image.tag" type="string" default="latest">
+  Frontend Docker image tag
+</ParamField>
+
+<ParamField path="frontend.image.pullPolicy" type="string" default="IfNotPresent">
+  Image pull policy
+</ParamField>
+
+<ParamField path="frontend.pullSecret" type="string" default="">
+  Name of existing image pull secret
+</ParamField>
+
+<ParamField path="frontend.service.type" type="string" default="ClusterIP">
+  Kubernetes service type
+</ParamField>
+
+<ParamField path="frontend.service.port" type="integer" default="8005">
+  Frontend service port
+</ParamField>
+
+<ParamField path="frontend.replicaCount" type="integer" default="1">
+  Number of frontend replicas
+</ParamField>
+
+### Frontend Environment Variables
+
+<ParamField path="frontend.env.BACKEND_BASE_URL" type="string" default="">
+  Backend API URL (automatically set if empty)
+</ParamField>
+
+<ParamField path="frontend.env.APP_PASSWORD" type="string" default="" required>
+  Application password for frontend access (must be set before deployment)
+</ParamField>
+
+### Frontend Resources
+
+<ParamField path="frontend.resources.requests.memory" type="string" default="128Mi">
+  Memory request
+</ParamField>
+
+<ParamField path="frontend.resources.requests.cpu" type="string" default="50m">
+  CPU request
+</ParamField>
+
+<ParamField path="frontend.resources.limits.memory" type="string" default="256Mi">
+  Memory limit
+</ParamField>
+
+<ParamField path="frontend.resources.limits.cpu" type="string" default="200m">
+  CPU limit
+</ParamField>
+
+### Frontend Health Checks
+
+<ParamField path="frontend.livenessProbe" type="object">
+  **httpGet.path**: `/`
+  
+  **httpGet.port**: `8005`
+  
+  **initialDelaySeconds**: `30`
+  
+  **periodSeconds**: `10`
+  
+  **timeoutSeconds**: `5`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+<ParamField path="frontend.readinessProbe" type="object">
+  **httpGet.path**: `/`
+  
+  **httpGet.port**: `8005`
+  
+  **initialDelaySeconds**: `10`
+  
+  **periodSeconds**: `5`
+  
+  **timeoutSeconds**: `3`
+  
+  **failureThreshold**: `3`
+</ParamField>
+
+### Frontend Ingress
+
+<ParamField path="frontend.ingress.enabled" type="boolean" default="false">
+  Enable ingress for frontend
+</ParamField>
+
+<ParamField path="frontend.ingress.className" type="string" default="">
+  Ingress class name (e.g., `nginx`, `traefik`)
+</ParamField>
+
+<ParamField path="frontend.ingress.annotations" type="object" default="{}">
+  Ingress annotations
+</ParamField>
+
+<ParamField path="frontend.ingress.hosts" type="array">
+  Ingress host configuration:
+  ```yaml
+  hosts:
+    - host: justbenchthatllm.local
+      paths:
+        - path: /
+          pathType: Prefix
+  ```
+</ParamField>
+
+<ParamField path="frontend.ingress.tls" type="array" default="[]">
+  TLS configuration for ingress
+</ParamField>
+
+## Scheduling Configuration
+
+All services support the following scheduling options:
+
+<ParamField path="*.nodeSelector" type="object" default="{}">
+  Node labels for pod assignment
+</ParamField>
+
+<ParamField path="*.tolerations" type="array" default="[]">
+  Tolerations for pod scheduling
+</ParamField>
+
+<ParamField path="*.affinity" type="object" default="{}">
+  Affinity rules for pod scheduling
+</ParamField>
+
+## Pod Customization
+
+All services support custom labels and annotations:
+
+<ParamField path="*.podLabels" type="object" default="{}">
+  Custom labels for pods
+</ParamField>
+
+<ParamField path="*.podAnnotations" type="object" default="{}">
+  Custom annotations for pods
+</ParamField>
+
+## Security Policies
+
+<ParamField path="podSecurityPolicy.enabled" type="boolean" default="false">
+  Enable Pod Security Policy
+</ParamField>
+
+<ParamField path="networkPolicy.enabled" type="boolean" default="false">
+  Enable Network Policy
+</ParamField>

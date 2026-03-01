@@ -1,0 +1,424 @@
+---
+title: Analyzing Results
+description: Deep dive into benchmark metrics including latency distributions, TTFT, throughput, and success rates. Learn to use comparison views, timeline analysis, and data export features.
+---
+
+## Overview
+
+JustBenchThatLLM provides comprehensive analytics to help you understand performance characteristics and make data-driven decisions. From high-level comparative visualizations to request-level details, every layer of analysis is designed to reveal actionable insights.
+
+## Production-Grade Metrics
+
+Every benchmark captures a complete performance profile:
+
+<img src="/img/result_02.png" alt="Metrics Dashboard" />
+
+### Latency Distribution
+
+**Understanding percentiles** - Why averages aren't enough:
+
+- **Minimum**: Best-case latency (usually cached or optimized requests)
+- **P50 (Median)**: Typical user experience - 50% of requests are faster
+- **P90**: Performance threshold - 90% of users get this or better
+- **P95**: Quality target - catches most outliers
+- **P99**: Tail latency - reveals worst-case scenarios affecting 1% of requests
+- **Maximum**: Absolute worst case (often indicates timeouts or errors)
+
+<Info>
+P95 and P99 are critical for SLO definitions because they represent the experience of your slowest users, not just the average.
+</Info>
+
+#### Why Percentiles Matter
+
+<Tabs>
+  <Tab title="P50 (Median)">
+    **The typical experience**
+
+    - Half of your users see better latency, half see worse
+    - More stable than average (not skewed by outliers)
+    - Good for understanding baseline performance
+    - Use for: Comparing typical performance between configurations
+  </Tab>
+
+  <Tab title="P90">
+    **The quality bar**
+
+    - 90% of requests complete within this time
+    - Catches most performance issues while ignoring rare outliers
+    - Common SLO target (e.g., "P90 latency < 500ms")
+    - Use for: Setting realistic performance targets
+  </Tab>
+
+  <Tab title="P95 & P99">
+    **Tail latency - the user experience killers**
+
+    - P95: 1 in 20 requests is this slow or slower
+    - P99: 1 in 100 requests is this slow or slower
+    - Critical for high-volume applications
+    - Often reveals capacity or resource contention issues
+    - Use for: Identifying performance bottlenecks and outliers
+
+    <Note>
+    A system with P50=100ms but P99=5000ms means 1% of users wait 50x longer than typical. That's a terrible experience for high-traffic applications.
+    </Note>
+  </Tab>
+</Tabs>
+
+### Time To First Token (TTFT)
+
+**Why TTFT matters for streaming applications:**
+
+TTFT measures the delay before the first token arrives - critical for perceived responsiveness:
+
+- **Low TTFT (< 200ms)**: Feels instant, excellent user experience
+- **Medium TTFT (200-500ms)**: Noticeable but acceptable delay
+- **High TTFT (> 500ms)**: Perceivable lag, may impact user experience
+
+<Tip>
+For streaming chat applications, TTFT is often more important than total latency. Users perceive fast TTFT as responsive even if full generation takes longer.
+</Tip>
+
+**TTFT Analysis:**
+- Compare TTFT across concurrency levels to identify queueing delays
+- Track TTFT percentiles to catch cold start issues
+- Monitor TTFT degradation during stepped load tests
+
+### Throughput Metrics
+
+**Understanding capacity:**
+
+- **Requests per second (RPS)**: How many requests completed per second
+- **Tokens per second**: Total token generation rate
+- **Tokens per second per request**: Average generation speed
+
+**Throughput insights:**
+
+<img src="/img/result_03.png" alt="Throughput Analysis" />
+
+- **Constant throughput** across concurrency levels = linear scaling
+- **Decreasing throughput** at high concurrency = resource saturation
+- **Throughput vs latency trade-off**: Higher concurrency may increase throughput but degrade latency
+
+### Success Rates
+
+**Reliability under load:**
+
+- **Success rate**: Percentage of requests that completed without errors
+- **Error types**: Timeouts, 5xx errors, connection failures
+- **Degradation patterns**: When errors begin to occur (capacity limit)
+
+<Note>
+- 100% success rate at low concurrency is expected
+- Success rate drops during stepped load indicate maximum capacity
+- Sudden drops often reveal configuration limits (connection pools, memory, etc.)
+</Note>
+
+## Visualization and Comparison
+
+JustBenchThatLLM is built from the ground up for comparative analysis:
+
+### Radar Charts - Multi-Dimensional Comparison
+
+<img src="/img/compare_02.jpg" alt="Comparison Radar Charts" />
+
+Radar charts visualize multiple metrics simultaneously, making it easy to compare overall performance profiles:
+
+**What you can see at a glance:**
+- Overall performance shape across all metrics
+- Strong vs weak dimensions for each configuration
+- Trade-offs between different approaches
+- Balanced vs specialized performance profiles
+
+**Use radar charts for:**
+- Comparing 2-4 different configurations side-by-side
+- Evaluating model selection (speed vs quality trade-offs)
+- Validating infrastructure changes
+- Presenting results to stakeholders
+
+### Overlay Graphs - Detailed Metric Comparison
+
+<img src="/img/compare_03.jpg" alt="Comparison Overlay Graphs" />
+
+Overlay graphs layer multiple benchmark runs on the same axes for detailed comparison:
+
+**Multi-run overlay features:**
+- Compare latency curves across configurations
+- See throughput scaling differences
+- Identify where performance diverges
+- Spot consistent vs variable behavior
+
+**Common comparison scenarios:**
+
+<Tabs>
+  <Tab title="Model Comparison">
+    **Compare different models on same infrastructure:**
+
+    Example: Mistral-7B vs Llama-7B vs Qwen-7B
+
+    - Which model has lowest latency?
+    - How do P99 latencies compare?
+    - Which scales better under load?
+    - What's the throughput difference?
+  </Tab>
+
+  <Tab title="Configuration Tuning">
+    **Test parameter impacts:**
+
+    Example: max_tokens 100 vs 500 vs 1000
+
+    - How does response length affect latency?
+    - What's the throughput penalty?
+    - Do percentiles scale linearly?
+    - Where's the optimal balance?
+  </Tab>
+
+  <Tab title="Library Updates">
+    **Validate framework changes safely:**
+
+    Example: vLLM v0.4.2 vs v0.5.0
+
+    - Is performance better or worse?
+    - Are there regressions at high concurrency?
+    - Has TTFT improved?
+    - Are success rates consistent?
+  </Tab>
+
+  <Tab title="Infrastructure Changes">
+    **Evaluate hardware and deployment options:**
+
+    Example: GPU-A100 vs GPU-H100 vs GPU-T4
+
+    - Cost vs performance trade-offs
+    - Scaling characteristics
+    - Memory limitations
+    - Optimal use cases for each option
+  </Tab>
+</Tabs>
+
+### Stepped Load Analysis
+
+Stepped load benchmarks automatically generate progressive load curves:
+
+<img src="/img/result_04.png" alt="Stepped Load Analysis" />
+
+**What stepped load reveals:**
+- **Linear scaling region**: Where adding concurrency increases throughput without degrading latency
+- **Degradation point**: When latency begins to increase significantly
+- **Maximum capacity**: Where errors start occurring or latency becomes unacceptable
+- **Resource saturation**: Identify which resource (CPU, GPU, memory, bandwidth) becomes the bottleneck
+
+<Tip>
+Use stepped load testing to find your optimal operating point - the highest concurrency where latency and success rate remain acceptable.
+</Tip>
+
+## Request-Level Analysis
+
+### Timeline View - Deep Dive
+
+<img src="/img/timeline.jpg" alt="Timeline View" />
+
+The interactive timeline view provides request-by-request detail:
+
+**What you can see:**
+- Individual request latencies plotted over time
+- TTFT for each request
+- Success vs error status
+- Request timing and concurrency patterns
+- Outliers and anomalies
+
+**Use timeline view to:**
+- **Identify patterns**: Regular slowdowns, periodic spikes, warm-up effects
+- **Spot anomalies**: Outlier requests that skew percentiles
+- **Debug issues**: Correlate errors with timing or concurrency
+- **Validate results**: Ensure benchmark ran as expected
+- **Understand behavior**: See how requests overlap and compete
+
+### Drilling Into Outliers
+
+When you spot anomalous requests in the timeline:
+
+1. **Click on outlier requests** to see detailed information
+2. **Review request parameters** to understand what was different
+3. **Check timing** - was it during high concurrency or another benchmark event?
+4. **Compare with endpoint logs** to identify root cause
+5. **Determine if outliers are acceptable** or indicate issues to fix
+
+<Note>
+Outliers often reveal:
+- Cold start penalties
+- Garbage collection pauses
+- Resource contention
+- Network issues
+- Queue saturation
+</Note>
+
+## Historical Comparison
+
+**Track performance over time:**
+
+- Compare today's deployment with last week's
+- Validate improvements after optimization
+- Detect performance regressions
+- Monitor infrastructure stability
+
+Use the dashboard's date range filtering to select benchmarks from different time periods and overlay them for comparison.
+
+## Exporting Data
+
+JustBenchThatLLM supports comprehensive data export for further analysis:
+
+### Export Formats
+
+<Tabs>
+  <Tab title="CSV Export">
+    **Tabular data for spreadsheets and analysis tools**
+
+    CSV exports include:
+    - Request-level details (latency, TTFT, tokens, status)
+    - Summary statistics (percentiles, averages, totals)
+    - Metadata (endpoint, configuration, timestamps)
+
+    **Use cases:**
+    - Import into Excel or Google Sheets
+    - Statistical analysis in R or Python
+    - Custom visualizations
+    - Long-term archival
+  </Tab>
+
+  <Tab title="JSON Export">
+    **Structured data for programmatic processing**
+
+    JSON exports include:
+    - Complete benchmark configuration
+    - All metrics and calculated statistics
+    - Request-level granular data
+    - Hierarchical structure for easy parsing
+
+    **Use cases:**
+    - Automated analysis pipelines
+    - Integration with monitoring systems
+    - Custom dashboards and reports
+    - API-driven workflows
+  </Tab>
+</Tabs>
+
+### Export Options
+
+- **Single benchmark**: Export one benchmark's complete data
+- **Comparison set**: Export multiple benchmarks for side-by-side analysis
+- **Filtered results**: Export based on dashboard filters (tags, date range)
+- **Summary only**: Export aggregate metrics without request-level detail
+
+<Tip>
+Export data regularly to build a historical database of performance metrics for long-term trend analysis.
+</Tip>
+
+## Making Data-Driven Decisions
+
+### Decision Framework
+
+<Steps>
+  <Step title="Establish Baseline">
+    Run fixed load benchmarks to understand optimal performance without contention.
+  </Step>
+
+  <Step title="Test Capacity">
+    Use stepped load to find maximum sustainable concurrency and identify breaking points.
+  </Step>
+
+  <Step title="Compare Options">
+    Run identical workloads against different configurations to isolate variable impacts.
+  </Step>
+
+  <Step title="Analyze Trade-offs">
+    Use radar charts and overlay graphs to understand multi-dimensional performance profiles.
+  </Step>
+
+  <Step title="Validate in Production">
+    Design workloads that match production patterns to ensure benchmark relevance.
+  </Step>
+
+  <Step title="Document and Share">
+    Export results and create comparison reports to communicate findings to stakeholders.
+  </Step>
+</Steps>
+
+### Real-World Use Cases
+
+<Tabs>
+  <Tab title="For DevOps/SRE">
+    **Pre-deployment validation:**
+    - Benchmark staging environment before promoting to production
+    - Compare performance with previous stable version
+    - Verify no regressions in P95/P99 latency
+    - Ensure success rates remain at 100% under expected load
+
+    **Capacity planning:**
+    - Use stepped load to determine current maximum capacity
+    - Calculate headroom for traffic growth
+    - Identify when to scale infrastructure
+    - Plan for seasonal traffic peaks
+
+    **SLO definition:**
+    - Use percentile data to set realistic latency targets
+    - Define success rate thresholds
+    - Establish performance budgets for new features
+    - Create alerting thresholds based on benchmark data
+  </Tab>
+
+  <Tab title="For ML Engineers">
+    **Model selection:**
+    - Compare inference speed across model families
+    - Evaluate quality vs performance trade-offs
+    - Test different quantization levels (FP16 vs INT8 vs INT4)
+    - Determine best model for latency requirements
+
+    **Configuration tuning:**
+    - Test max_tokens impact on throughput
+    - Find optimal batch sizes for your hardware
+    - Tune temperature and sampling parameters
+    - Balance generation quality with speed
+
+    **Library updates:**
+    - Validate new vLLM or serving framework versions
+    - Test optimization flags and features
+    - Ensure backward compatibility
+    - Measure improvement from updates
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+### Analysis Workflow
+
+1. **Start with high-level metrics**: Review radar charts and summary statistics
+2. **Drill into anomalies**: Use overlay graphs to understand divergences
+3. **Examine request-level data**: Timeline view reveals patterns and outliers
+4. **Compare with expectations**: Validate results match anticipated behavior
+5. **Document insights**: Record findings and decisions for future reference
+
+### Avoiding Common Pitfalls
+
+<Note>
+**Don't:**
+- Rely solely on average latency (use percentiles)
+- Ignore tail latency (P95/P99 matter for user experience)
+- Compare benchmarks with different warmup states
+- Draw conclusions from single runs (validate with multiple benchmarks)
+- Skip timeline analysis (request-level patterns reveal important insights)
+
+**Do:**
+- Focus on P95/P99 for SLO definitions
+- Run multiple benchmarks to validate consistency
+- Consider TTFT for streaming applications
+- Use stepped load to understand scalability
+- Export data for long-term trend tracking
+</Note>
+
+## Next Steps
+
+- Use insights to optimize your infrastructure and configurations
+- Set up regular benchmark schedules to track performance over time
+- Create comparison reports for stakeholder communication
+- Build a historical database of performance metrics for trend analysis
+- Integrate benchmarking into your CI/CD pipeline for continuous validation

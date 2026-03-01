@@ -1,0 +1,667 @@
+---
+title: Troubleshooting
+description: Diagnose and resolve common JustBenchThatLLM issues
+---
+
+This guide covers common issues you may encounter when deploying and running JustBenchThatLLM, along with solutions and debugging steps.
+
+## Connection Issues
+
+### Backend API Unreachable
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Frontend cannot connect to backend
+- API requests timeout or return connection errors
+- `curl http://backend:8000/health` fails
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+**Kubernetes**:
+
+```bash
+# Check backend pod status
+kubectl get pods -l app.kubernetes.io/component=backend
+
+# Check pod logs
+kubectl logs -l app.kubernetes.io/component=backend --tail=100
+
+# Verify service exists
+kubectl get svc justbenchthatllm-backend
+
+# Test internal connectivity
+kubectl run test-pod --rm -it --image=curlimages/curl -- \
+  curl http://justbenchthatllm-backend:8000/health
+```
+
+**Docker Compose**:
+
+```bash
+# Check backend container status
+docker-compose ps backend
+
+# View logs
+docker-compose logs backend
+
+# Test connectivity
+docker-compose exec frontend curl http://backend:8000/health
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Backend pod not starting**:
+
+1. Check readiness probe is passing (values.yaml:189-196):
+   ```bash
+   kubectl describe pod <backend-pod>
+   # Look for: Readiness probe failed
+   ```
+
+2. Verify database connections:
+   ```bash
+   kubectl logs <backend-pod> | grep -i "mongo\|redis"
+   ```
+
+3. Check environment variables:
+   ```bash
+   kubectl exec <backend-pod> -- env | grep -E "REDIS_URL|MONGODB_URL"
+   ```
+
+**Frontend configuration issue**:
+
+Verify `BACKEND_BASE_URL` is set correctly (values.yaml:306):
+
+```yaml values.yaml
+frontend:
+  env:
+    BACKEND_BASE_URL: "http://justbenchthatllm-backend:8000"
+```
+
+For external access through Ingress:
+
+```yaml values.yaml
+frontend:
+  env:
+    BACKEND_BASE_URL: "https://api.example.com"  # Public backend URL
+```
+</Accordion>
+</AccordionGroup>
+
+### Worker Not Processing Benchmarks
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Benchmarks stuck in queue
+- Worker pod running but no activity
+- No benchmark results appearing
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check worker pod status
+kubectl get pods -l app.kubernetes.io/component=worker
+
+# View worker logs
+kubectl logs -l app.kubernetes.io/component=worker --tail=100 -f
+
+# Check if worker can reach Redis
+kubectl exec <worker-pod> -- wget -qO- http://redis:6379 || echo "Cannot reach Redis"
+
+# Verify health endpoint
+kubectl exec <worker-pod> -- curl http://localhost:8006/health
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Worker cannot connect to Redis**:
+
+1. Verify Redis is running:
+   ```bash
+   kubectl get pods -l app.kubernetes.io/component=redis
+   kubectl exec <redis-pod> -- redis-cli ping
+   ```
+
+2. Check Redis URL configuration:
+   ```bash
+   kubectl exec <worker-pod> -- env | grep REDIS_URL
+   # Should show: redis://justbenchthatllm-redis:6379/0
+   ```
+
+**Worker resource limits exceeded**:
+
+Worker may be OOMKilled. Check events:
+
+```bash
+kubectl describe pod <worker-pod> | grep -A 5 "Last State"
+# If you see "OOMKilled", increase memory limits
+```
+
+Increase worker resources (values.yaml:247-254):
+
+```yaml values.yaml
+worker:
+  resources:
+    requests:
+      memory: "1Gi"    # Increased from 512Mi
+    limits:
+      memory: "2Gi"    # Increased from 1Gi
+```
+
+**Worker crashed or restarting**:
+
+Check crash loop:
+
+```bash
+kubectl get pods | grep worker
+# If you see CrashLoopBackOff:
+
+kubectl logs <worker-pod> --previous
+```
+</Accordion>
+</AccordionGroup>
+
+## Database Connectivity Issues
+
+### MongoDB Connection Failures
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Backend/Worker logs show MongoDB connection errors
+- `MongoServerError: connection timeout`
+- Benchmarks not persisting to database
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check MongoDB pod status
+kubectl get pods -l app.kubernetes.io/component=mongo
+
+# Verify MongoDB is responding
+kubectl exec <mongo-pod> -- mongosh --eval "db.adminCommand('ping')"
+
+# Check backend MongoDB connection
+kubectl logs <backend-pod> | grep -i mongodb
+
+# Test connectivity from backend pod
+kubectl exec <backend-pod> -- wget -qO- http://justbenchthatllm-mongo:27017 || echo "Cannot connect"
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**MongoDB not ready**:
+
+MongoDB takes longer to start (30 second initial delay from values.yaml:114):
+
+```bash
+# Wait for MongoDB to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=mongo --timeout=120s
+```
+
+**Connection string incorrect**:
+
+Verify environment variables:
+
+```bash
+kubectl exec <backend-pod> -- env | grep MONGODB
+# Expected:
+# MONGODB_URL=mongodb://justbenchthatllm-mongo:27017
+# MONGODB_DB_NAME=benchmark_db
+```
+
+**MongoDB storage full**:
+
+Check persistent volume usage:
+
+```bash
+kubectl exec <mongo-pod> -- df -h /data/db
+```
+
+If full, increase storage size (values.yaml:96-101):
+
+```yaml values.yaml
+mongo:
+  persistence:
+    size: 50Gi  # Increased from 20Gi
+```
+
+Then expand the PVC:
+
+```bash
+kubectl edit pvc data-justbenchthatllm-mongo-0
+# Update spec.resources.requests.storage: 50Gi
+```
+</Accordion>
+</AccordionGroup>
+
+### Redis Connection Failures
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Worker cannot fetch benchmark jobs from queue
+- Backend cannot queue benchmarks
+- `redis.exceptions.ConnectionError`
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check Redis pod
+kubectl get pods -l app.kubernetes.io/component=redis
+
+# Test Redis connectivity
+kubectl exec <redis-pod> -- redis-cli ping
+
+# Check Redis health from worker
+kubectl exec <worker-pod> -- sh -c 'echo "ping" | nc redis 6379'
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Redis pod not ready**:
+
+```bash
+# Check Redis logs
+kubectl logs -l app.kubernetes.io/component=redis
+
+# Restart Redis if needed
+kubectl delete pod <redis-pod>
+```
+
+**Redis URL misconfigured**:
+
+Verify REDIS_URL in worker and backend:
+
+```bash
+kubectl exec <worker-pod> -- env | grep REDIS_URL
+# Expected: redis://justbenchthatllm-redis:6379/0
+```
+
+**Redis memory limit reached**:
+
+Check Redis memory usage:
+
+```bash
+kubectl exec <redis-pod> -- redis-cli INFO memory
+```
+
+Increase Redis memory limits (values.yaml:50-56):
+
+```yaml values.yaml
+redis:
+  resources:
+    limits:
+      memory: "1Gi"  # Increased from 512Mi
+```
+</Accordion>
+</AccordionGroup>
+
+## Performance Problems
+
+### Slow Benchmark Execution
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Benchmarks take longer than expected
+- High CPU usage on worker pods
+- Benchmark queue backing up
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check worker resource usage
+kubectl top pods -l app.kubernetes.io/component=worker
+
+# View worker logs for performance issues
+kubectl logs <worker-pod> --tail=200
+
+# Check if workers are CPU throttled
+kubectl describe pod <worker-pod> | grep -A 10 "Limits"
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Insufficient worker resources**:
+
+Increase worker CPU and memory (values.yaml:247-254):
+
+```yaml values.yaml
+worker:
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"  # 2 cores
+```
+
+**Not enough workers for parallel execution**:
+
+Scale workers horizontally:
+
+```bash
+# Increase worker count
+kubectl scale deployment justbenchthatllm-worker --replicas=5
+```
+
+Or in values.yaml (values.yaml:220):
+
+```yaml values.yaml
+worker:
+  replicaCount: 5  # Increased from 1
+```
+
+**External LLM API rate limiting**:
+
+If benchmarking external LLM APIs, you may be hitting rate limits. Check worker logs:
+
+```bash
+kubectl logs <worker-pod> | grep -i "rate limit\|429\|quota"
+```
+
+Solutions:
+- Reduce parallel workers
+- Implement backoff in benchmark configuration
+- Contact LLM provider for increased quotas
+</Accordion>
+</AccordionGroup>
+
+### High Memory Usage
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Pods being OOMKilled
+- Memory usage consistently near limits
+- Degraded performance
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check memory usage
+kubectl top pods
+
+# Check for OOMKilled pods
+kubectl get pods | grep OOMKilled
+
+# View pod events
+kubectl describe pod <pod-name> | grep -A 10 "Events"
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Increase memory limits**:
+
+For worker (values.yaml:247-254):
+
+```yaml values.yaml
+worker:
+  resources:
+    requests:
+      memory: "1Gi"
+    limits:
+      memory: "3Gi"  # Increased from 1Gi
+```
+
+For backend (values.yaml:170-177):
+
+```yaml values.yaml
+backend:
+  resources:
+    requests:
+      memory: "512Mi"
+    limits:
+      memory: "1Gi"  # Increased from 512Mi
+```
+
+**MongoDB memory usage**:
+
+MongoDB uses ~50% of available memory for WiredTiger cache. Increase if needed (values.yaml:103-110):
+
+```yaml values.yaml
+mongo:
+  resources:
+    requests:
+      memory: "1Gi"
+    limits:
+      memory: "4Gi"  # Increased from 2Gi
+```
+</Accordion>
+</AccordionGroup>
+
+## Certificate and TLS Issues
+
+### CA Bundle Configuration Problems
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- `SSL: CERTIFICATE_VERIFY_FAILED` errors
+- Worker cannot connect to external APIs with custom certificates
+- Backend TLS handshake failures
+</Accordion>
+
+<Accordion title="Diagnosis" icon="magnifying-glass">
+```bash
+# Check if CA bundle is mounted
+kubectl exec <worker-pod> -- ls -la /etc/ssl/certs/ca-bundle.pem
+
+# Verify CA bundle content
+kubectl exec <worker-pod> -- cat /etc/ssl/certs/ca-bundle.pem | head -20
+
+# Check logs for SSL errors
+kubectl logs <worker-pod> | grep -i "ssl\|certificate\|tls"
+```
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Enable CA bundle for worker** (values.yaml:229-244):
+
+```yaml values.yaml
+worker:
+  caBundle:
+    enabled: true
+    content: |
+      -----BEGIN CERTIFICATE-----
+      MIIDxTCCAq2gAwIBAgIQAqxcJmoLQJhH...
+      -----END CERTIFICATE-----
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+    subPath: ca-bundle.pem
+```
+
+**Or use existing ConfigMap**:
+
+```bash
+# Create ConfigMap from certificate file
+kubectl create configmap custom-ca-bundle \
+  --from-file=ca-bundle.pem=/path/to/your/ca-bundle.pem
+```
+
+Then reference in values.yaml:
+
+```yaml values.yaml
+worker:
+  caBundle:
+    enabled: true
+    existingConfigMap: "custom-ca-bundle"
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+    subPath: ca-bundle.pem
+```
+
+**Enable CA bundle for backend** (values.yaml:156-168):
+
+```yaml values.yaml
+backend:
+  caBundle:
+    enabled: true
+    existingConfigMap: "custom-ca-bundle"
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+    subPath: ca-bundle.pem
+```
+
+**Verify CA bundle is loaded**:
+
+```bash
+# Check if certificate is valid
+kubectl exec <worker-pod> -- openssl x509 -in /etc/ssl/certs/ca-bundle.pem -text -noout
+```
+
+<Note>
+After updating CA bundle configuration, restart the pods:
+
+```bash
+kubectl rollout restart deployment/justbenchthatllm-worker
+kubectl rollout restart deployment/justbenchthatllm-backend
+```
+</Note>
+</Accordion>
+</AccordionGroup>
+
+## Deployment Issues
+
+### Helm Installation Failures
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- `helm install` fails with errors
+- Pods not being created
+- Invalid configuration errors
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Validate Helm values**:
+
+```bash
+# Dry-run to check for errors
+helm install justbenchthatllm ./helm/justbenchthatllm \
+  --dry-run --debug --values values.yaml
+
+# Render templates to inspect generated YAML
+helm template justbenchthatllm ./helm/justbenchthatllm \
+  --values values.yaml > rendered.yaml
+```
+
+**Common configuration mistakes**:
+
+1. **Missing APP_PASSWORD** (values.yaml:308):
+   ```yaml
+   frontend:
+     env:
+       APP_PASSWORD: "change-me-to-secure-password"
+   ```
+
+2. **Invalid replica count**:
+   ```yaml
+   worker:
+     replicaCount: 0  # ❌ Should be at least 1
+   ```
+
+3. **Storage class doesn't exist**:
+   ```bash
+   # Check available storage classes
+   kubectl get storageclass
+   
+   # Update values.yaml to use valid storage class
+   mongo:
+     persistence:
+       storageClass: "standard"  # Use valid class name
+   ```
+
+**Rollback failed installation**:
+
+```bash
+# List releases
+helm list
+
+# Rollback to previous version
+helm rollback justbenchthatllm 1
+
+# Or uninstall and reinstall
+helm uninstall justbenchthatllm
+kubectl delete pvc --all  # Be careful with data!
+helm install justbenchthatllm ./helm/justbenchthatllm --values values.yaml
+```
+</Accordion>
+</AccordionGroup>
+
+### Image Pull Errors
+
+<AccordionGroup>
+<Accordion title="Symptoms" icon="triangle-exclamation">
+- Pods stuck in `ImagePullBackOff`
+- `ErrImagePull` errors
+- Cannot pull images from registry
+</Accordion>
+
+<Accordion title="Solutions" icon="lightbulb">
+**Configure image pull secret** (values.yaml:11-19):
+
+```yaml values.yaml
+pullSecret:
+  create: true
+  username: "your-registry-username"
+  password: "your-registry-password"
+  registry: "docker.io"  # or your private registry
+```
+
+**Or use existing secret**:
+
+```yaml values.yaml
+backend:
+  pullSecret: "existing-pull-secret-name"
+
+worker:
+  pullSecret: "existing-pull-secret-name"
+
+frontend:
+  pullSecret: "existing-pull-secret-name"
+```
+
+**Verify image exists**:
+
+```bash
+# Test pull locally
+docker pull redteamsfr/benchmark-backend:latest
+docker pull redteamsfr/benchmark-worker:latest
+docker pull redteamsfr/benchmark-frontend:latest
+```
+
+**Use specific image tags** instead of `latest`:
+
+```yaml values.yaml
+backend:
+  image:
+    tag: "v1.2.3"  # Instead of "latest"
+```
+</Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+<Warning>
+If you continue to experience issues after trying these solutions:
+
+1. **Collect diagnostic information**:
+   ```bash
+   # Get all pod status
+   kubectl get pods -o wide > pods.txt
+   
+   # Get all logs
+   kubectl logs -l app.kubernetes.io/name=justbenchthatllm --all-containers > logs.txt
+   
+   # Get events
+   kubectl get events --sort-by='.lastTimestamp' > events.txt
+   ```
+
+2. **Check the documentation**: Review configuration guides for detailed setup instructions
+
+3. **Community support**: Include diagnostic output when seeking help
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Monitoring" icon="chart-line" href="/operations/monitoring">
+    Set up monitoring to catch issues early
+  </Card>
+  <Card title="Scaling" icon="arrow-up-right-dots" href="/operations/scaling">
+    Optimize resources and scale components
+  </Card>
+</CardGroup>

@@ -1,0 +1,418 @@
+---
+title: Scaling
+description: Scale JustBenchThatLLM components for production workloads
+---
+
+JustBenchThatLLM is designed to scale horizontally and vertically to meet your benchmarking demands. This guide covers scaling strategies for each component.
+
+## Horizontal Scaling
+
+### Worker Scaling
+
+The worker component is designed for horizontal scaling to run parallel benchmarks. Each worker can process one benchmark at a time.
+
+<Accordion title="Kubernetes: Scale Workers" icon="kubernetes">
+**In values.yaml**:
+
+```yaml values.yaml
+worker:
+  replicaCount: 3  # Run 3 parallel workers
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+```
+
+**Dynamic scaling**:
+
+```bash
+# Scale to 5 workers
+kubectl scale deployment justbenchthatllm-worker --replicas=5
+
+# Verify scaling
+kubectl get pods -l app.kubernetes.io/component=worker
+```
+
+**Horizontal Pod Autoscaler**:
+
+```yaml worker-hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: justbenchthatllm-worker-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: justbenchthatllm-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+```
+
+Apply the HPA:
+
+```bash
+kubectl apply -f worker-hpa.yaml
+
+# Monitor autoscaling
+kubectl get hpa
+```
+</Accordion>
+
+<Accordion title="Docker Compose: Scale Workers" icon="docker">
+Scale workers using Docker Compose:
+
+```bash
+# Scale to 4 workers
+docker-compose up -d --scale worker=4
+
+# Verify scaling
+docker-compose ps worker
+```
+
+<Warning>
+When scaling workers with Docker Compose, ensure you remove the `container_name` field from the worker service definition to allow multiple instances.
+</Warning>
+
+**Modified docker-compose.yml**:
+
+```yaml docker-compose.yml
+worker:
+  image: redteamsfr/benchmark-worker:latest
+  # Remove: container_name: benchmark-worker
+  environment:
+    - REDIS_URL=redis://redis:6379/0
+    - LOG_LEVEL=INFO
+    - MONGODB_URL=mongodb://mongodb:27017
+    - MONGODB_DB_NAME=benchmark_db
+    - STORAGE_TYPE=mongodb
+  depends_on:
+    redis:
+      condition: service_healthy
+    mongo:
+      condition: service_healthy
+  restart: unless-stopped
+```
+</Accordion>
+
+### Backend API Scaling
+
+Scale the backend API to handle more concurrent requests:
+
+<Accordion title="Kubernetes: Scale Backend" icon="kubernetes">
+**In values.yaml** (values.yaml:147):
+
+```yaml values.yaml
+backend:
+  replicaCount: 3  # Run 3 backend instances
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+```
+
+**Dynamic scaling**:
+
+```bash
+# Scale to 5 backend instances
+kubectl scale deployment justbenchthatllm-backend --replicas=5
+```
+
+**Load balancing**: Kubernetes automatically distributes traffic across backend replicas through the Service resource.
+</Accordion>
+
+<Accordion title="Docker Compose: Backend Scaling" icon="docker">
+```bash
+# Scale backend (requires removing container_name)
+docker-compose up -d --scale backend=3
+```
+
+<Note>
+For Docker Compose, consider using a reverse proxy (nginx, traefik) for load balancing across backend instances.
+</Note>
+</Accordion>
+
+## Vertical Scaling
+
+Adjust resource limits based on workload requirements.
+
+### Worker Resources
+
+For compute-intensive benchmarks, increase worker resources (values.yaml:247-254):
+
+```yaml values.yaml
+worker:
+  resources:
+    requests:
+      memory: "1Gi"    # Increased from 512Mi
+      cpu: "500m"      # Increased from 250m
+    limits:
+      memory: "2Gi"    # Increased from 1Gi
+      cpu: "2000m"     # Increased from 1000m (2 cores)
+```
+
+### Backend Resources
+
+For high-traffic deployments (values.yaml:170-177):
+
+```yaml values.yaml
+backend:
+  resources:
+    requests:
+      memory: "512Mi"  # Increased from 256Mi
+      cpu: "250m"      # Increased from 100m
+    limits:
+      memory: "1Gi"    # Increased from 512Mi
+      cpu: "1000m"     # Increased from 500m (1 core)
+```
+
+### Frontend Resources
+
+The frontend typically requires minimal resources (values.yaml:309-316), but can be adjusted:
+
+```yaml values.yaml
+frontend:
+  resources:
+    requests:
+      memory: "256Mi"  # Increased from 128Mi
+      cpu: "100m"      # Increased from 50m
+    limits:
+      memory: "512Mi"  # Increased from 256Mi
+      cpu: "500m"      # Increased from 200m
+```
+
+## Storage Scaling
+
+### Redis Persistence
+
+Redis stores benchmark queue data. Scale storage based on queue depth (values.yaml:42-47):
+
+```yaml values.yaml
+redis:
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"  # Use high-performance storage
+    size: 20Gi                # Increased from 8Gi
+    accessMode: ReadWriteOnce
+```
+
+<Note>
+Redis uses append-only file (AOF) persistence. Monitor `/data` volume usage:
+
+```bash
+kubectl exec -it <redis-pod> -- df -h /data
+```
+</Note>
+
+### MongoDB Persistence
+
+MongoDB stores benchmark results and metadata. Plan storage for growth (values.yaml:96-101):
+
+```yaml values.yaml
+mongo:
+  persistence:
+    enabled: true
+    storageClass: "standard"  # Or "fast-ssd" for better performance
+    size: 100Gi              # Increased from 20Gi
+    accessMode: ReadWriteOnce
+```
+
+**Estimate storage needs**:
+- Average benchmark result: ~10-50 KB
+- 10,000 benchmarks: ~500 MB
+- 100,000 benchmarks: ~5 GB
+- Plus indexes and overhead: multiply by 2-3x
+
+<Warning>
+**Important**: In Kubernetes, PersistentVolume size increases require storage class support for volume expansion. Check your storage class:
+
+```bash
+kubectl get storageclass -o yaml
+# Look for: allowVolumeExpansion: true
+```
+</Warning>
+
+### Expanding Persistent Volumes
+
+<Accordion title="Expand MongoDB Volume" icon="database">
+**Step 1**: Edit the PVC:
+
+```bash
+kubectl edit pvc data-justbenchthatllm-mongo-0
+```
+
+**Step 2**: Update the storage request:
+
+```yaml
+spec:
+  resources:
+    requests:
+      storage: 50Gi  # Increase from current size
+```
+
+**Step 3**: Monitor expansion:
+
+```bash
+kubectl get pvc -w
+```
+
+<Note>
+Some storage classes require pod restart for expansion to complete. Delete the pod to trigger restart:
+
+```bash
+kubectl delete pod justbenchthatllm-mongo-0
+```
+</Note>
+</Accordion>
+
+## Database Scaling
+
+### Redis Scaling Considerations
+
+For very high throughput:
+
+<Accordion title="Redis High Availability" icon="shield">
+**Redis Sentinel** (for production):
+
+```yaml values.yaml
+redis:
+  replicaCount: 3  # Master + 2 replicas
+  resources:
+    requests:
+      memory: "512Mi"  # Increased from 256Mi
+      cpu: "250m"      # Increased from 100m
+    limits:
+      memory: "1Gi"    # Increased from 512Mi
+      cpu: "1000m"     # Increased from 500m
+```
+
+<Warning>
+The current Helm chart uses a single Redis instance. For production HA, consider using the [Bitnami Redis chart](https://github.com/bitnami/charts/tree/main/bitnami/redis) with Sentinel or Redis Cluster.
+</Warning>
+</Accordion>
+
+### MongoDB Scaling
+
+For large result datasets:
+
+<Accordion title="MongoDB Performance Tuning" icon="gauge">
+**Increase resources** (values.yaml:103-110):
+
+```yaml values.yaml
+mongo:
+  resources:
+    requests:
+      memory: "1Gi"    # Increased from 512Mi
+      cpu: "500m"      # Increased from 250m
+    limits:
+      memory: "4Gi"    # Increased from 2Gi
+      cpu: "2000m"     # Increased from 1000m (2 cores)
+```
+
+**WiredTiger cache**: MongoDB uses ~50% of available memory for cache. With 4Gi limit, expect ~2Gi cache.
+
+<Note>
+For production with large datasets, consider MongoDB Replica Sets or [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) for managed scaling.
+</Note>
+</Accordion>
+
+## Production Architecture Example
+
+A production-ready scaled deployment:
+
+```yaml values.yaml
+# Backend - 3 replicas for HA
+backend:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# Worker - 5 workers for parallel benchmarks
+worker:
+  replicaCount: 5
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+
+# Frontend - 2 replicas
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Redis - increased resources and storage
+redis:
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# MongoDB - production storage and resources
+mongo:
+  persistence:
+    size: 100Gi
+    storageClass: "fast-ssd"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+```
+
+**Deploy with these settings**:
+
+```bash
+helm upgrade --install justbenchthatllm ./helm/justbenchthatllm \
+  --values production-values.yaml
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Monitoring" icon="chart-line" href="/operations/monitoring">
+    Monitor resource usage and component health
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/operations/troubleshooting">
+    Diagnose performance and scaling issues
+  </Card>
+</CardGroup>

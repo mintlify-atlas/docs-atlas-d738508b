@@ -1,0 +1,314 @@
+---
+title: Monitoring
+description: Monitor the health and status of JustBenchThatLLM components
+---
+
+JustBenchThatLLM provides comprehensive health check endpoints and monitoring capabilities for all components. This guide covers how to monitor your deployment effectively.
+
+## Health Check Endpoints
+
+### Backend API
+
+The backend exposes two health endpoints on port `8000`:
+
+<CodeGroup>
+```bash Liveness Check
+curl http://backend:8000/health
+```
+
+```bash Readiness Check
+curl http://backend:8000/ready
+```
+</CodeGroup>
+
+**Configuration** (from values.yaml:180-196):
+- **Liveness probe**: Checks if the backend is running
+  - Initial delay: 30 seconds
+  - Check interval: 10 seconds
+  - Timeout: 5 seconds
+  - Failure threshold: 3 attempts
+
+- **Readiness probe**: Checks if the backend can accept requests
+  - Initial delay: 10 seconds
+  - Check interval: 5 seconds
+  - Timeout: 3 seconds
+  - Failure threshold: 3 attempts
+
+### Worker
+
+The worker exposes health endpoints on port `8006`:
+
+<CodeGroup>
+```bash Liveness Check
+curl http://worker:8006/health
+```
+
+```bash Readiness Check
+curl http://worker:8006/ready
+```
+</CodeGroup>
+
+**Configuration** (from values.yaml:256-273):
+- **Liveness probe**: Ensures worker process is alive
+  - Initial delay: 30 seconds
+  - Check interval: 10 seconds
+  - Timeout: 5 seconds
+  - Failure threshold: 3 attempts
+
+- **Readiness probe**: Ensures worker can process benchmarks
+  - Initial delay: 10 seconds
+  - Check interval: 5 seconds
+  - Timeout: 3 seconds
+  - Failure threshold: 3 attempts
+
+## Database Health Checks
+
+### Redis
+
+Monitor Redis connectivity and performance:
+
+<CodeGroup>
+```bash Docker Compose
+# Redis health check runs automatically
+docker-compose ps redis
+
+# Manual check
+docker exec redis redis-cli ping
+# Expected: PONG
+```
+
+```bash Kubernetes
+# Check Redis pod status
+kubectl get pods -l app.kubernetes.io/component=redis
+
+# Execute health check
+kubectl exec -it <redis-pod> -- redis-cli ping
+```
+</CodeGroup>
+
+**Health check configuration** (from values.yaml:59-64):
+- Initial delay: 10 seconds
+- Check interval: 5 seconds
+- Timeout: 3 seconds
+- Success threshold: 1
+- Failure threshold: 5 attempts
+
+### MongoDB
+
+Monitor MongoDB connectivity and replication status:
+
+<CodeGroup>
+```bash Docker Compose
+# MongoDB health check runs automatically
+docker-compose ps mongo
+
+# Manual check
+docker exec mongodb mongosh --eval "db.adminCommand('ping')"
+```
+
+```bash Kubernetes
+# Check MongoDB pod status
+kubectl get pods -l app.kubernetes.io/component=mongo
+
+# Execute health check
+kubectl exec -it <mongo-pod> -- mongosh --eval "db.adminCommand('ping')"
+```
+</CodeGroup>
+
+**Health check configuration** (from values.yaml:112-118):
+- Initial delay: 30 seconds
+- Check interval: 5 seconds
+- Timeout: 3 seconds
+- Success threshold: 1
+- Failure threshold: 5 attempts
+
+## Component Status Monitoring
+
+### Docker Compose
+
+Monitor all components with Docker Compose:
+
+```bash
+# Check status of all services
+docker-compose ps
+
+# View logs for specific component
+docker-compose logs -f backend
+docker-compose logs -f worker
+
+# Check resource usage
+docker stats
+```
+
+### Kubernetes
+
+Monitor components in Kubernetes:
+
+<CodeGroup>
+```bash Pod Status
+# Check all pods
+kubectl get pods
+
+# Check specific component
+kubectl get pods -l app.kubernetes.io/component=backend
+kubectl get pods -l app.kubernetes.io/component=worker
+```
+
+```bash Resource Usage
+# View resource consumption
+kubectl top pods
+
+# Detailed pod information
+kubectl describe pod <pod-name>
+```
+
+```bash Logs
+# Stream logs
+kubectl logs -f deployment/justbenchthatllm-backend
+kubectl logs -f deployment/justbenchthatllm-worker
+
+# View recent logs
+kubectl logs --tail=100 deployment/justbenchthatllm-backend
+```
+</CodeGroup>
+
+## Resource Usage Patterns
+
+### Expected Resource Consumption
+
+Based on the Helm values configuration:
+
+<AccordionGroup>
+<Accordion title="Backend API" icon="server">
+**Requests** (values.yaml:171-174):
+- Memory: 256Mi
+- CPU: 100m (0.1 cores)
+
+**Limits** (values.yaml:175-177):
+- Memory: 512Mi
+- CPU: 500m (0.5 cores)
+
+**Typical usage**:
+- Idle: ~100-150Mi memory, 50-100m CPU
+- Under load: ~300-400Mi memory, 200-400m CPU
+</Accordion>
+
+<Accordion title="Worker" icon="gears">
+**Requests** (values.yaml:248-251):
+- Memory: 512Mi
+- CPU: 250m (0.25 cores)
+
+**Limits** (values.yaml:252-254):
+- Memory: 1Gi
+- CPU: 1000m (1 core)
+
+**Typical usage**:
+- Idle: ~200-300Mi memory, 50-100m CPU
+- Running benchmarks: ~600-900Mi memory, 500-900m CPU
+</Accordion>
+
+<Accordion title="Redis" icon="database">
+**Requests** (values.yaml:51-53):
+- Memory: 256Mi
+- CPU: 100m
+
+**Limits** (values.yaml:54-56):
+- Memory: 512Mi
+- CPU: 500m
+
+**Typical usage**:
+- Steady state: ~50-100Mi memory, 10-50m CPU
+- High throughput: ~200-300Mi memory, 100-200m CPU
+</Accordion>
+
+<Accordion title="MongoDB" icon="database">
+**Requests** (values.yaml:104-107):
+- Memory: 512Mi
+- CPU: 250m
+
+**Limits** (values.yaml:108-110):
+- Memory: 2Gi
+- CPU: 1000m (1 core)
+
+**Typical usage**:
+- Steady state: ~300-500Mi memory, 100-200m CPU
+- Heavy writes: ~800Mi-1.5Gi memory, 400-800m CPU
+</Accordion>
+</AccordionGroup>
+
+### Monitoring Resource Usage
+
+<CodeGroup>
+```bash Kubernetes
+# Real-time resource monitoring
+kubectl top pods
+
+# Watch resource usage
+watch kubectl top pods
+
+# Check node resources
+kubectl top nodes
+```
+
+```bash Docker Compose
+# Live resource stats
+docker stats
+
+# Specific container
+docker stats benchmark-backend benchmark-worker
+```
+</CodeGroup>
+
+<Note>
+**Best Practice**: Set up alerts when components consistently approach their resource limits. This indicates you may need to scale up resources or optimize performance.
+</Note>
+
+## Integration with Monitoring Tools
+
+### Prometheus Metrics
+
+If using Prometheus, monitor these key metrics:
+
+```yaml Example ServiceMonitor
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: justbenchthatllm
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: justbenchthatllm
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics
+```
+
+### Log Aggregation
+
+Configure log levels through environment variables (values.yaml:151, 224):
+
+```yaml
+backend:
+  env:
+    LOG_LEVEL: INFO  # Options: DEBUG, INFO, WARNING, ERROR
+
+worker:
+  env:
+    LOG_LEVEL: INFO
+```
+
+<Warning>
+Setting `LOG_LEVEL: DEBUG` significantly increases log volume and may impact performance. Only use DEBUG level for troubleshooting.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Scaling" icon="arrow-up-right-dots" href="/operations/scaling">
+    Learn how to scale components for production workloads
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/operations/troubleshooting">
+    Diagnose and resolve common issues
+  </Card>
+</CardGroup>

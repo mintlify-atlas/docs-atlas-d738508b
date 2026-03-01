@@ -1,0 +1,574 @@
+---
+title: 'Configuration'
+description: 'Configure environment variables, storage, certificates, and secrets for JustBenchThatLLM deployments'
+---
+
+## Overview
+
+This guide covers post-deployment configuration for both Docker Compose and Kubernetes/Helm deployments, including environment variables, storage settings, custom certificates, and private registry authentication.
+
+## Environment Variables
+
+Each component of JustBenchThatLLM can be configured through environment variables.
+
+### Backend Configuration
+
+<Tabs>
+  <Tab title="Docker Compose">
+    Edit the `backend` service in `docker-compose.yml`:
+    
+    ```yaml
+    backend:
+      environment:
+        - REDIS_URL=redis://redis:6379/0
+        - LOG_LEVEL=INFO
+        - STORAGE_TYPE=mongodb
+        - MONGODB_URL=mongodb://mongodb:27017
+        - MONGODB_DB_NAME=benchmark_db
+    ```
+  </Tab>
+  
+  <Tab title="Kubernetes/Helm">
+    Set values in your `values.yaml`:
+    
+    ```yaml
+    backend:
+      env:
+        LOG_LEVEL: INFO
+        STORAGE_TYPE: mongodb
+        MONGODB_DB_NAME: benchmark_db
+    ```
+    
+    <Note>
+    Redis and MongoDB URLs are automatically configured based on service names in Kubernetes.
+    </Note>
+  </Tab>
+</Tabs>
+
+#### Available Variables
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `REDIS_URL` | Redis connection string | `redis://redis:6379/0` |
+| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+| `STORAGE_TYPE` | Storage backend type | `mongodb` |
+| `MONGODB_URL` | MongoDB connection string | `mongodb://mongodb:27017` |
+| `MONGODB_DB_NAME` | Database name for benchmark storage | `benchmark_db` |
+
+### Worker Configuration
+
+<Tabs>
+  <Tab title="Docker Compose">
+    ```yaml
+    worker:
+      environment:
+        - REDIS_URL=redis://redis:6379/0
+        - LOG_LEVEL=INFO
+        - STORAGE_TYPE=mongodb
+        - MONGODB_URL=mongodb://mongodb:27017
+        - MONGODB_DB_NAME=benchmark_db
+    ```
+  </Tab>
+  
+  <Tab title="Kubernetes/Helm">
+    ```yaml
+    worker:
+      env:
+        LOG_LEVEL: INFO
+        STORAGE_TYPE: mongodb
+        MONGODB_DB_NAME: benchmark_db
+    ```
+  </Tab>
+</Tabs>
+
+#### Available Variables
+
+Same as backend configuration. The worker requires identical settings to connect to the same Redis and MongoDB instances.
+
+### Frontend Configuration
+
+<Tabs>
+  <Tab title="Docker Compose">
+    ```yaml
+    frontend:
+      environment:
+        - BACKEND_BASE_URL=http://backend:8000
+        - APP_PASSWORD=your-secure-password
+    ```
+  </Tab>
+  
+  <Tab title="Kubernetes/Helm">
+    ```yaml
+    frontend:
+      env:
+        BACKEND_BASE_URL: ""  # Auto-configured if empty
+        APP_PASSWORD: "your-secure-password"
+    ```
+  </Tab>
+</Tabs>
+
+#### Available Variables
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `BACKEND_BASE_URL` | URL to backend API | `http://backend:8000` |
+| `APP_PASSWORD` | Password for accessing the frontend | (Required for production) |
+
+<Warning>
+Always set a strong `APP_PASSWORD` for production deployments to secure access to the benchmarking interface.
+</Warning>
+
+## Storage Configuration
+
+### MongoDB Configuration
+
+#### Docker Compose
+
+MongoDB is deployed with persistent volume storage:
+
+```yaml
+mongo:
+  image: mongo:8.0
+  ports:
+    - "27017:27017"
+  volumes:
+    - mongo_data:/data/db
+  healthcheck:
+    test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+```
+
+Data is stored in the `mongo_data` volume. To backup:
+
+```bash
+# Backup
+docker compose exec mongo mongodump --out=/data/db/backup
+
+# Restore
+docker compose exec mongo mongorestore /data/db/backup
+```
+
+#### Kubernetes/Helm
+
+Configure MongoDB persistence in `values.yaml`:
+
+```yaml
+mongo:
+  persistence:
+    enabled: true
+    storageClass: ""  # Use default storage class
+    size: 20Gi
+    accessMode: ReadWriteOnce
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+```
+
+<Note>
+Leave `storageClass` empty to use the default storage class, or specify a custom class like `fast-ssd` for better performance.
+</Note>
+
+### Redis Configuration
+
+#### Docker Compose
+
+Redis is configured with AOF persistence:
+
+```yaml
+redis:
+  image: redis:7-alpine
+  volumes:
+    - redis_data:/data
+  command: ["redis-server", "--appendonly", "yes"]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+```
+
+#### Kubernetes/Helm
+
+Configure Redis persistence and resources:
+
+```yaml
+redis:
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 8Gi
+    accessMode: ReadWriteOnce
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  args: ["--appendonly", "yes"]
+```
+
+## Custom CA Certificates
+
+If your LLM endpoints use custom SSL certificates, you can configure CA bundles for the backend and worker services.
+
+### Backend CA Bundle
+
+<Tabs>
+  <Tab title="Inline Certificate">
+    ```yaml values.yaml
+    backend:
+      caBundle:
+        enabled: true
+        content: |
+          -----BEGIN CERTIFICATE-----
+          MIIDxTCCAq2gAwIBAgIQAqxcJmoLQ...
+          -----END CERTIFICATE-----
+        mountPath: /etc/ssl/certs/ca-bundle.pem
+        subPath: ca-bundle.pem
+    ```
+  </Tab>
+  
+  <Tab title="Existing ConfigMap">
+    First, create a ConfigMap with your certificate:
+    
+    ```bash
+    kubectl create configmap custom-ca-bundle \
+      --from-file=ca-bundle.pem=/path/to/your/ca-bundle.pem \
+      -n justbenchthatllm
+    ```
+    
+    Then reference it in `values.yaml`:
+    
+    ```yaml
+    backend:
+      caBundle:
+        enabled: true
+        existingConfigMap: "custom-ca-bundle"
+        mountPath: /etc/ssl/certs/ca-bundle.pem
+        subPath: ca-bundle.pem
+    ```
+  </Tab>
+</Tabs>
+
+### Worker CA Bundle
+
+The worker service supports the same CA bundle configuration:
+
+```yaml values.yaml
+worker:
+  caBundle:
+    enabled: true
+    content: |
+      -----BEGIN CERTIFICATE-----
+      MIIDxTCCAq2gAwIBAgIQAqxcJmoLQ...
+      -----END CERTIFICATE-----
+    mountPath: /etc/ssl/certs/ca-bundle.pem
+    subPath: ca-bundle.pem
+```
+
+<Note>
+Both backend and worker should use the same CA bundle if they need to communicate with the same LLM endpoints.
+</Note>
+
+### Environment Variable for CA Bundle
+
+After mounting the CA bundle, configure the SSL certificate path:
+
+```yaml
+backend:
+  env:
+    SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.pem
+    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.pem
+
+worker:
+  env:
+    SSL_CERT_FILE: /etc/ssl/certs/ca-bundle.pem
+    REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-bundle.pem
+```
+
+## Private Registry Authentication
+
+If your Docker images are hosted in a private registry, configure pull secrets.
+
+### Creating Pull Secrets
+
+<Steps>
+  <Step title="Using Helm values (Automatic)">
+    Configure the pull secret in `values.yaml`:
+    
+    ```yaml
+    pullSecret:
+      create: true
+      username: "your-username"
+      password: "your-password"
+      registry: "docker.io"  # or your private registry URL
+    ```
+    
+    The chart will automatically create a secret named `justbenchthatllm-pull-secret`.
+  </Step>
+  
+  <Step title="Using kubectl (Manual)">
+    Create the secret manually:
+    
+    ```bash
+    kubectl create secret docker-registry my-pull-secret \
+      --docker-server=docker.io \
+      --docker-username=your-username \
+      --docker-password=your-password \
+      --docker-email=your-email@example.com \
+      -n justbenchthatllm
+    ```
+  </Step>
+</Steps>
+
+### Applying Pull Secrets to Components
+
+Reference the pull secret for each component:
+
+```yaml values.yaml
+backend:
+  pullSecret: "my-pull-secret"  # or "justbenchthatllm-pull-secret"
+
+worker:
+  pullSecret: "my-pull-secret"
+
+frontend:
+  pullSecret: "my-pull-secret"
+```
+
+<Warning>
+Ensure the pull secret exists in the same namespace as your deployment before referencing it.
+</Warning>
+
+## Resource Limits and Requests
+
+Adjust resource allocation based on your workload and cluster capacity.
+
+### Production Recommendations
+
+```yaml values.yaml
+# High-load backend configuration
+backend:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+# Worker for intensive benchmarks
+worker:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+# Frontend with moderate load
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# MongoDB for large datasets
+mongo:
+  persistence:
+    size: 100Gi
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "8Gi"
+      cpu: "2000m"
+
+# Redis with higher memory
+redis:
+  persistence:
+    size: 16Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+```
+
+## Health Check Configuration
+
+Customize health check parameters for each component.
+
+### Backend Health Checks
+
+```yaml values.yaml
+backend:
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+```
+
+### Worker Health Checks
+
+```yaml values.yaml
+worker:
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8006
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8006
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+```
+
+## Pod Placement
+
+Control where pods are scheduled using node selectors, tolerations, and affinity rules.
+
+### Node Selectors
+
+Schedule components on specific nodes:
+
+```yaml values.yaml
+worker:
+  nodeSelector:
+    workload-type: compute-intensive
+
+mongo:
+  nodeSelector:
+    storage-type: fast-ssd
+```
+
+### Tolerations
+
+Allow pods to run on tainted nodes:
+
+```yaml values.yaml
+worker:
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "benchmark"
+      effect: "NoSchedule"
+```
+
+### Affinity Rules
+
+Co-locate or separate pods:
+
+```yaml values.yaml
+backend:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                    - backend
+            topologyKey: kubernetes.io/hostname
+```
+
+## Applying Configuration Changes
+
+### Docker Compose
+
+```bash
+# Edit docker-compose.yml, then restart
+docker compose down
+docker compose up -d
+
+# Or restart specific service
+docker compose restart backend
+```
+
+### Kubernetes/Helm
+
+```bash
+# Update with new values
+helm upgrade justbenchthatllm ./justbenchthatllm \
+  -n justbenchthatllm \
+  -f values.yaml
+
+# Verify changes
+kubectl get pods -n justbenchthatllm
+kubectl describe deployment backend -n justbenchthatllm
+```
+
+## Configuration Validation
+
+### Verify Environment Variables
+
+```bash
+# Docker Compose
+docker compose exec backend env | grep -E 'REDIS_URL|MONGODB'
+
+# Kubernetes
+kubectl exec -n justbenchthatllm deployment/backend -- env | grep -E 'REDIS_URL|MONGODB'
+```
+
+### Test Connectivity
+
+```bash
+# Test Redis connection from backend
+kubectl exec -n justbenchthatllm deployment/backend -- \
+  sh -c 'apt-get update && apt-get install -y redis-tools && redis-cli -u $REDIS_URL ping'
+
+# Test MongoDB connection
+kubectl exec -n justbenchthatllm deployment/backend -- \
+  sh -c 'curl -s $MONGODB_URL'
+```
+
+## Next Steps
+
+- Set up monitoring with Prometheus and Grafana
+- Configure automated backups for MongoDB
+- Enable TLS/SSL for external access
+- Implement network policies for security
